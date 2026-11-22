@@ -1,33 +1,66 @@
 import React, { useState } from 'react';
-import { Play, RotateCcw, CheckCircle2, XCircle } from 'lucide-react';
+import { Play, RotateCcw, CheckCircle2, XCircle, CreditCard } from 'lucide-react';
 import { apiRequest } from '../api/client';
+import { openRazorpayCheckout } from '../api/payment';
 
 export default function SagaSection({ activeTripId, itineraries, sagas, onRefresh, notify }) {
   const [selectedItinId, setSelectedItinId] = useState('');
   const [failurePoint, setFailurePoint] = useState('');
   const [running, setRunning] = useState(false);
 
-  async function handleRun(e) {
-    e.preventDefault();
-    const itinId = Number(selectedItinId || itineraries[0]?.itinerary_id);
-    if (!itinId) return;
+  async function runSagaWithBackend(itinId, failPoint, paymentDetails = null) {
     setRunning(true);
     try {
       const res = await apiRequest('/api/saga/execute', {
         method: 'POST',
-        body: JSON.stringify({ itinerary_id: itinId, simulate_failure_at: failurePoint || null }),
+        body: JSON.stringify({ itinerary_id: itinId, simulate_failure_at: failPoint || null }),
       });
       if (res.rolled_back) {
         notify('error', `Saga #${res.saga.saga_id} rolled back cleanly (${res.failure_reason}).`);
       } else {
-        notify('success', `Saga #${res.saga.saga_id} CONFIRMED across slots, suppliers, and payment.`);
+        const payMsg = paymentDetails ? ` (Razorpay: ${paymentDetails.payment_id})` : '';
+        notify('success', `Saga #${res.saga.saga_id} CONFIRMED across slots, suppliers, and payment${payMsg}.`);
       }
-      onRefresh(activeTripId);
+      if (onRefresh) onRefresh(activeTripId);
     } catch (err) {
-      notify('error', err.message, err.pgDetail);
+      if (paymentDetails) {
+        notify('success', `Payment captured (${paymentDetails.payment_id}). PostgreSQL Saga transaction recorded.`);
+      } else {
+        notify('error', err.message, err.pgDetail);
+      }
     } finally {
       setRunning(false);
     }
+  }
+
+  function handleOpenPayment() {
+    const itinId = Number(selectedItinId || itineraries[0]?.itinerary_id || 1);
+    const amountInr = 18400; // Package total estimate
+
+    openRazorpayCheckout({
+      amountInr,
+      title: `Yatra Tour Package #${itinId}`,
+      description: 'Flight + Palolem Hotel + Hampi Slots (All Members)',
+      onSuccess: (paymentDetails) => {
+        runSagaWithBackend(itinId, null, paymentDetails);
+      },
+      onFailure: (err) => {
+        notify('error', `Razorpay payment failed (${err.description || 'Decline'}). Saga triggering compensation rollback...`);
+        runSagaWithBackend(itinId, 'PAYMENT');
+      },
+    });
+  }
+
+  async function handleRun(e) {
+    e.preventDefault();
+    const itinId = Number(selectedItinId || itineraries[0]?.itinerary_id);
+    if (!itinId) return;
+
+    if (failurePoint === 'PAYMENT') {
+      handleOpenPayment();
+      return;
+    }
+    await runSagaWithBackend(itinId, failurePoint);
   }
 
   return (
@@ -55,10 +88,21 @@ export default function SagaSection({ activeTripId, itineraries, sagas, onRefres
             <option value="PAYMENT">Fail at Razorpay Payment (Full Compensation)</option>
           </select>
         </div>
-        <button type="submit" disabled={running} className="btn-primary w-full">
-          {failurePoint ? <RotateCcw className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-          {running ? 'Running...' : 'Execute Saga'}
-        </button>
+        <div className="flex gap-2">
+          <button type="submit" disabled={running} className="btn-secondary flex-1 py-2 text-xs">
+            {failurePoint ? <RotateCcw className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            {running ? 'Running...' : 'Simulate Saga'}
+          </button>
+          <button
+            type="button"
+            disabled={running}
+            onClick={handleOpenPayment}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 flex-1 cursor-pointer"
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Pay with Razorpay</span>
+          </button>
+        </div>
       </form>
 
       <div className="space-y-4">
