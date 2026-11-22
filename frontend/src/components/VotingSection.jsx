@@ -76,8 +76,8 @@ export default function VotingSection({ activeTripId, tripDetail, proposals, onR
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => handleVote(prop.proposal_id, 'APPROVE')} className="btn-primary text-sm py-2 px-4"><Vote className="w-4 h-4" /> Approve</button>
-              <button onClick={() => handleVote(prop.proposal_id, 'REJECT')} className="btn-secondary text-sm py-2 px-4">Reject</button>
+              <button onClick={() => handleVote(prop.proposal_id, 'APPROVE')} className="btn-success text-sm py-2 px-4"><Vote className="w-4 h-4" /> Approve</button>
+              <button onClick={() => handleVote(prop.proposal_id, 'REJECT')} className="bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold rounded-pill text-sm py-2 px-4 transition-all active:scale-[0.98]">Reject</button>
               <button onClick={() => handleCommitApproval(prop.itinerary_id)} className="btn-secondary text-sm py-2 px-4 ml-auto border-primary">
                 Commit Approval
               </button>

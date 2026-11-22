@@ -85,7 +85,7 @@ export default function AuthModal({ open, onClose, onAuthSuccess }) {
                 key={em}
                 type="button"
                 onClick={() => { setMode('login'); setEmail(em); setPassword('yatra123'); }}
-                className="text-xs font-mono px-2.5 py-1 rounded-pill bg-surface-soft hover:bg-block-lime"
+                className="text-xs font-mono px-2.5 py-1 rounded-pill bg-surface-soft hover:bg-sky-100 hover:text-sky-900 border border-hairline transition-colors"
               >
                 {em}
               </button>

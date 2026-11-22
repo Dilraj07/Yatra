@@ -231,9 +231,9 @@ export default function TripChatHub({
             <button
               onClick={handleAnalyzeChat}
               disabled={analyzing}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-pill text-xs font-bold bg-block-lime hover:bg-[#cde499] text-black border border-black/15 active:scale-95 transition-all shadow-xs disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-pill text-xs font-semibold bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300/80 active:scale-95 transition-all shadow-xs disabled:opacity-40"
             >
-              <Sparkles className="w-3.5 h-3.5 text-accent-magenta" />
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
               {analyzing ? 'Analyzing...' : 'Synthesize Plan'}
             </button>
           </div>
@@ -266,8 +266,8 @@ export default function TripChatHub({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-block-lime border border-black/15 text-black flex items-center justify-center">
-                          <Bot className="w-3.5 h-3.5 text-black" />
+                        <div className="w-6 h-6 rounded-full bg-purple-100 border border-purple-200 text-purple-700 flex items-center justify-center">
+                          <Bot className="w-3.5 h-3.5 text-purple-700" />
                         </div>
                         <span className="text-xs font-bold text-black">Yatra Copilot</span>
                         <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-pill bg-white text-black/80 font-medium border border-hairline">
@@ -322,7 +322,7 @@ export default function TripChatHub({
                   <div
                     className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-2xs ${
                       isMe
-                        ? 'bg-block-lime/80 border border-black/15 text-black rounded-tr-xs font-medium'
+                        ? 'bg-sky-50 border border-sky-200 text-slate-800 rounded-tr-xs font-normal'
                         : 'bg-white border border-hairline text-black rounded-tl-xs'
                     }`}
                   >
@@ -346,7 +346,7 @@ export default function TripChatHub({
               <button
                 type="submit"
                 disabled={sending || !inputText.trim()}
-                className="w-9 h-9 rounded-full bg-block-lime hover:bg-[#cde499] text-black border border-black/15 flex items-center justify-center shrink-0 disabled:opacity-40 active:scale-95 transition-all shadow-xs"
+                className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shrink-0 disabled:opacity-40 active:scale-95 transition-all shadow-xs"
               >
                 <Send className="w-4 h-4" />
               </button>
@@ -354,7 +354,7 @@ export default function TripChatHub({
           ) : (
             <div className="p-4 border-t border-hairline bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-surface-soft border border-hairline text-black flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full bg-sky-50 border border-sky-200 text-sky-700 flex items-center justify-center shrink-0">
                   <Lock className="w-4 h-4" />
                 </div>
                 <div>
@@ -365,7 +365,7 @@ export default function TripChatHub({
               <button
                 type="button"
                 onClick={onOpenAuth}
-                className="btn-primary text-xs py-2 px-5 whitespace-nowrap"
+                className="inline-flex items-center justify-center gap-1.5 bg-sky-100 hover:bg-sky-200 text-sky-900 border border-sky-300 font-semibold rounded-pill text-xs py-2 px-5 whitespace-nowrap active:scale-95 transition-all shadow-xs"
               >
                 Sign in to Chat
               </button>
@@ -376,30 +376,30 @@ export default function TripChatHub({
         {/* Right Column: Live Plan & Budget Snapshot (Reacts to Chat) */}
         <div className="lg:col-span-5 space-y-4">
           {/* Segmented View Switcher */}
-          <div className="bg-white border border-hairline rounded-2xl p-1.5 flex gap-1 shadow-xs">
+          <div className="bg-surface-soft border border-hairline rounded-2xl p-1.5 flex gap-1 shadow-2xs">
             <button
               onClick={() => setActiveTab('plan')}
               className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'plan' ? 'bg-block-lime text-black border border-black/15 font-bold shadow-2xs' : 'text-black/60 hover:text-black hover:bg-surface-soft border border-transparent'
+                activeTab === 'plan' ? 'bg-white text-black font-semibold shadow-xs border border-hairline' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5" /> Plan & Schedule
+              <Calendar className="w-3.5 h-3.5 text-blue-600" /> Plan & Schedule
             </button>
             <button
               onClick={() => setActiveTab('tickets')}
               className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'tickets' ? 'bg-block-lime text-black border border-black/15 font-bold shadow-2xs' : 'text-black/60 hover:text-black hover:bg-surface-soft border border-transparent'
+                activeTab === 'tickets' ? 'bg-white text-black font-semibold shadow-xs border border-hairline' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
               }`}
             >
-              <Ticket className="w-3.5 h-3.5" /> Tickets
+              <Ticket className="w-3.5 h-3.5 text-amber-600" /> Tickets
             </button>
             <button
               onClick={() => setActiveTab('budget')}
               className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'budget' ? 'bg-block-lime text-black border border-black/15 font-bold shadow-2xs' : 'text-black/60 hover:text-black hover:bg-surface-soft border border-transparent'
+                activeTab === 'budget' ? 'bg-white text-black font-semibold shadow-xs border border-hairline' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
               }`}
             >
-              <Coins className="w-3.5 h-3.5" /> Budget & Split
+              <Coins className="w-3.5 h-3.5 text-emerald-600" /> Budget & Split
             </button>
           </div>
 
@@ -494,13 +494,13 @@ export default function TripChatHub({
                   <div className="flex gap-2 pt-1">
                     <button
                       onClick={() => handleVote(primaryProposal.proposal_id, 'APPROVE')}
-                      className="flex-1 py-2 px-3 rounded-xl bg-block-lime hover:bg-[#cde499] text-black font-bold text-xs flex items-center justify-center gap-1.5 border border-black/15 active:scale-95 transition-all shadow-xs"
+                      className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-xs"
                     >
                       <Check className="w-3.5 h-3.5" /> Approve Proposal
                     </button>
                     <button
                       onClick={() => handleVote(primaryProposal.proposal_id, 'REJECT')}
-                      className="py-2 px-3 rounded-xl bg-white hover:bg-surface-soft border border-hairline text-black font-medium text-xs active:scale-95 transition-all flex items-center gap-1"
+                      className="py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold text-xs active:scale-95 transition-all flex items-center gap-1"
                     >
                       <X className="w-3.5 h-3.5" /> Reject
                     </button>

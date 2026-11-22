@@ -128,8 +128,8 @@ export default function App() {
           <div className="flex items-center gap-6">
             {/* Confident Editorial Logo */}
             <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab('chat')}>
-              <div className="w-8 h-8 rounded-lg bg-block-lime border border-black/15 text-black flex items-center justify-center font-bold shadow-2xs">
-                <Compass className="w-4.5 h-4.5 text-black" />
+              <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold shadow-2xs">
+                <Compass className="w-4.5 h-4.5 text-sky-400" />
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-xl font-bold tracking-tight text-black">Yatra</span>
@@ -175,7 +175,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div className="relative group">
                   <button className="flex items-center gap-2 text-xs font-semibold px-3.5 py-1.5 rounded-pill bg-surface-soft hover:bg-hairline text-black border border-hairline transition-colors">
-                    <div className="w-5 h-5 rounded-full bg-block-lime border border-black/15 text-black flex items-center justify-center text-[10px] font-bold">
+                    <div className="w-5 h-5 rounded-full bg-sky-100 border border-sky-300 text-sky-900 flex items-center justify-center text-[10px] font-bold">
                       {user.full_name?.charAt(0) || 'U'}
                     </div>
                     <span className="max-w-[120px] truncate">{user.full_name}</span>
@@ -223,8 +223,8 @@ export default function App() {
                 onClick={() => setActiveTab(t.id)}
                 className={`whitespace-nowrap px-4 py-2 text-xs font-semibold rounded-pill flex items-center gap-1.5 transition-all ${
                   isActive
-                    ? 'bg-block-lime text-black border border-black/15 font-bold shadow-xs'
-                    : 'bg-surface-soft text-black/70 hover:bg-hairline hover:text-black border border-transparent'
+                    ? 'bg-white text-black border border-hairline font-semibold shadow-xs'
+                    : 'text-black/60 hover:text-black hover:bg-surface-soft border border-transparent'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
