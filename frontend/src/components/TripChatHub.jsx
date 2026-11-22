@@ -364,24 +364,41 @@ export default function TripChatHub({
                 );
               }
 
+              const getSenderMeta = (name) => {
+                const n = (name || '').toLowerCase();
+                if (n.includes('dilraj')) return { initials: 'DS', bg: 'bg-purple-100 text-purple-800 border-purple-200' };
+                if (n.includes('arya')) return { initials: 'AW', bg: 'bg-sky-100 text-sky-800 border-sky-200' };
+                if (n.includes('aarush')) return { initials: 'AL', bg: 'bg-amber-100 text-amber-800 border-amber-200' };
+                return { initials: (name || 'U').slice(0, 2).toUpperCase(), bg: 'bg-slate-100 text-slate-800 border-slate-200' };
+              };
+              const sender = getSenderMeta(msg.sender_name);
+
               return (
-                <div key={msg.id || index} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                  <div className="flex items-center gap-1.5 mb-1 px-1">
-                    <span className="text-[11px] font-semibold text-black/70">{msg.sender_name}</span>
-                    <span className="text-[10px] text-black/40">
-                      {msg.created_at
-                        ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        : ''}
-                    </span>
-                  </div>
+                <div key={msg.id || index} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : 'flex-row'} items-start`}>
                   <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-2xs ${
-                      isMe
-                        ? 'bg-sky-50 border border-sky-200 text-slate-800 rounded-tr-xs font-normal'
-                        : 'bg-white border border-hairline text-black rounded-tl-xs'
-                    }`}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border shrink-0 mt-0.5 shadow-2xs ${sender.bg}`}
+                    title={msg.sender_name}
                   >
-                    {msg.text}
+                    {sender.initials}
+                  </div>
+                  <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
+                    <div className="flex items-center gap-1.5 mb-1 px-1">
+                      <span className="text-[11px] font-semibold text-black/75">{msg.sender_name}</span>
+                      <span className="text-[10px] text-black/40">
+                        {msg.created_at
+                          ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : ''}
+                      </span>
+                    </div>
+                    <div
+                      className={`rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-2xs transition-all ${
+                        isMe
+                          ? 'bg-slate-900 text-white rounded-tr-xs font-normal shadow-xs'
+                          : 'bg-white border border-hairline text-slate-900 rounded-tl-xs'
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
                   </div>
                 </div>
               );

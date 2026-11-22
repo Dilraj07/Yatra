@@ -214,39 +214,39 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
       {/* Two-Column Grid: Live Flights & Real Hotels */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Column 1: Live Airspace Radar */}
-        <div className="editorial-card space-y-4">
-          <div className="flex items-center justify-between pb-2.5 border-b border-hairline-soft">
+        <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-hairline">
             <div className="flex items-center gap-2">
               <Plane className="w-4 h-4 text-blue-600" />
-              <span className="caption-mono">AIRSPACE RADAR · OPENSKY NETWORK</span>
+              <span className="caption-mono font-bold">AIRSPACE RADAR · OPENSKY NETWORK</span>
             </div>
-            <span className="text-xs font-mono text-muted">
+            <span className="text-xs font-mono text-muted bg-surface-soft px-2.5 py-0.5 rounded-pill border border-hairline">
               {flightsData?.flights?.length || 0} Aircraft on Screen
             </span>
           </div>
 
-          <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
             {(flightsData?.flights || []).map((flight, idx) => (
               <div
                 key={flight.icao24 + idx}
-                className="rounded-md bg-surface-soft p-3.5 space-y-2 border border-hairline-soft hover:border-blue-400 transition-colors"
+                className="rounded-xl bg-surface-soft p-3.5 space-y-2.5 border border-hairline hover:border-blue-400 transition-colors shadow-2xs"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span
-                      className="text-xs font-mono font-bold px-2 py-0.5 rounded text-white"
+                      className="text-xs font-mono font-bold px-2 py-0.5 rounded-md text-white shadow-2xs"
                       style={{ backgroundColor: flight.badge_color || '#1e40af' }}
                     >
                       {flight.callsign}
                     </span>
-                    <span className="font-semibold text-sm">{flight.airline}</span>
+                    <span className="font-bold text-sm text-slate-900">{flight.airline}</span>
                   </div>
-                  <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                  <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-pill border border-blue-200">
                     {flight.status}
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-xs font-mono text-muted pt-1 border-t border-hairline-soft">
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono text-muted pt-2 border-t border-hairline">
                   <div>
                     <span className="text-[10px] block text-neutral-400">ALTITUDE</span>
                     <span className="font-bold text-foreground">
@@ -261,7 +261,7 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
                   </div>
                   <div>
                     <span className="text-[10px] block text-neutral-400">SOURCE</span>
-                    <span className="text-green-700 font-medium">OpenSky Radar</span>
+                    <span className="text-emerald-700 font-bold">Live OpenSky</span>
                   </div>
                 </div>
               </div>
@@ -276,42 +276,42 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
         </div>
 
         {/* Column 2: Real Verified Hotels */}
-        <div className="editorial-card space-y-4">
-          <div className="flex items-center justify-between pb-2.5 border-b border-hairline-soft">
+        <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-hairline">
             <div className="flex items-center gap-2">
               <Building className="w-4 h-4 text-emerald-600" />
-              <span className="caption-mono">VERIFIED HOTELS · OPENSTREETMAP</span>
+              <span className="caption-mono font-bold">VERIFIED HOTELS · OPENSTREETMAP</span>
             </div>
-            <span className="text-xs font-mono text-muted">
+            <span className="text-xs font-mono text-muted bg-surface-soft px-2.5 py-0.5 rounded-pill border border-hairline">
               {hotelsData?.hotels?.length || 0} Properties Found
             </span>
           </div>
 
-          <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[520px] overflow-y-auto pr-1">
             {(hotelsData?.hotels || []).map((hotel, idx) => (
               <div
                 key={hotel.name + idx}
-                className="rounded-md bg-surface-soft p-3.5 space-y-2.5 border border-hairline-soft hover:border-emerald-400 transition-colors"
+                className="rounded-xl bg-surface-soft p-3.5 space-y-2.5 border border-hairline hover:border-emerald-400 transition-colors shadow-2xs"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h4 className="font-bold text-sm text-foreground">{hotel.name}</h4>
+                    <h4 className="font-bold text-sm text-slate-900">{hotel.name}</h4>
                     <p className="text-xs text-muted mt-0.5">{hotel.locality}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <span className="font-mono font-bold text-sm text-foreground">
+                    <span className="font-mono font-bold text-sm text-orange-600">
                       ₹{hotel.est_cost_inr?.toLocaleString()}
                     </span>
                     <span className="text-[10px] block text-muted">/ night</span>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-hairline-soft">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-hairline">
                   <div className="flex flex-wrap gap-1">
                     {(hotel.amenities || ['WiFi', 'AC']).slice(0, 3).map((am, i) => (
                       <span
                         key={i}
-                        className="text-[10px] font-mono bg-surface-card px-1.5 py-0.5 rounded border border-hairline-soft"
+                        className="text-[10px] font-mono bg-white px-2 py-0.5 rounded-md border border-hairline text-neutral-600"
                       >
                         {am}
                       </span>
@@ -320,7 +320,7 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
 
                   <button
                     onClick={() => handleBookHotel(hotel)}
-                    className="btn-primary text-xs py-1 px-3 flex items-center gap-1.5"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-3.5 rounded-pill text-xs flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
                   >
                     <CreditCard className="w-3.5 h-3.5" /> Book with Razorpay
                   </button>

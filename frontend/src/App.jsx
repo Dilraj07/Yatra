@@ -159,9 +159,15 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* AI Copilot Status Badge (Pastel Lilac + Accent Magenta) */}
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-medium bg-block-lilac/40 border border-block-lilac/80 text-black">
-              <Sparkles className="w-3.5 h-3.5 text-accent-magenta" />
+            {/* Database Engine Status Badge */}
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-mono font-medium bg-emerald-50 border border-emerald-200 text-emerald-800 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span>PostgreSQL 16 · GiST & ACID</span>
+            </div>
+
+            {/* AI Copilot Status Badge */}
+            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-medium bg-purple-50 border border-purple-200 text-purple-900 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
               <span>Copilot Ready</span>
             </div>
 
@@ -169,7 +175,7 @@ export default function App() {
             <button
               onClick={() => refreshAll(activeTripId)}
               title="Refresh Data"
-              className="w-9 h-9 rounded-full bg-surface-soft hover:bg-hairline text-black/70 flex items-center justify-center transition-colors"
+              className="w-9 h-9 rounded-full bg-surface-soft hover:bg-hairline text-black/70 flex items-center justify-center transition-colors shadow-2xs"
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
@@ -216,8 +222,8 @@ export default function App() {
       </header>
 
       {/* Modern Segmented Navigation Tabs */}
-      <div className="max-w-[1280px] mx-auto w-full px-6 pt-6 pb-2">
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar border-b border-hairline pb-3">
+      <div className="max-w-[1280px] mx-auto w-full px-6 pt-5 pb-1">
+        <div className="bg-surface-soft p-1.5 rounded-2xl border border-hairline inline-flex items-center gap-1 overflow-x-auto max-w-full no-scrollbar shadow-2xs">
           {WORKSPACE_TABS.map((t) => {
             const Icon = t.icon;
             const isActive = activeTab === t.id;
@@ -225,13 +231,13 @@ export default function App() {
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id)}
-                className={`whitespace-nowrap px-4 py-2 text-xs font-semibold rounded-pill flex items-center gap-1.5 transition-all duration-200 ease-out active:scale-95 ${
+                className={`whitespace-nowrap px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all duration-200 ease-out active:scale-95 ${
                   isActive
-                    ? 'bg-white text-black border border-hairline font-semibold shadow-xs scale-[1.02]'
-                    : 'text-black/60 hover:text-black hover:bg-surface-soft border border-transparent'
+                    ? 'bg-white text-slate-900 border border-hairline font-bold shadow-xs scale-[1.01]'
+                    : 'text-neutral-500 hover:text-slate-900 hover:bg-white/60 border border-transparent'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 transition-transform duration-200 ${isActive ? 'scale-110 text-black' : 'text-black/40'}`} />
+                <Icon className={`w-3.5 h-3.5 transition-transform duration-200 ${isActive ? 'scale-110 text-orange-600' : 'text-neutral-400'}`} />
                 <span>{t.label}</span>
               </button>
             );
