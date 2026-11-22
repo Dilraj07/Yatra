@@ -310,3 +310,4 @@ def get_live_weather(
     }
     _set_cached(cache_key, result)
     return result
+

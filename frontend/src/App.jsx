@@ -129,13 +129,14 @@ export default function App() {
       >
         <div className="max-w-[1280px] mx-auto h-full px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-6">
-            {/* Confident Editorial Logo */}
-            <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab('chat')}>
-              <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold shadow-2xs">
-                <Compass className="w-4.5 h-4.5 text-sky-400" />
+            {/* Iconic यात्रा Yatra Logo */}
+            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setActiveTab('chat')}>
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-600 text-white flex items-center justify-center font-black shadow-xs group-hover:scale-105 transition-transform">
+                <span className="text-lg leading-none font-bold">या</span>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-xl font-bold tracking-tight text-black">Yatra</span>
+                <span className="text-2xl font-extrabold tracking-tight text-orange-600">यात्रा</span>
+                <span className="text-xl font-bold tracking-tight text-slate-900">Yatra</span>
                 <span className="hidden sm:inline-block text-[11px] font-mono uppercase tracking-wider text-black/50">
                   Smart Group Tourism
                 </span>
@@ -338,6 +339,7 @@ export default function App() {
       <footer className="border-t border-hairline bg-canvas py-6 px-6 mt-auto">
         <div className="max-w-[1280px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink/50">
           <div className="flex items-center gap-2">
+            <span className="font-extrabold text-orange-600">यात्रा</span>
             <span className="font-bold text-ink">Yatra</span>
             <span>·</span>
             <span>Smart Group Tourism Platform</span>
