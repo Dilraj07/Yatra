@@ -221,13 +221,13 @@ export default function App() {
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id)}
-                className={`whitespace-nowrap px-4 py-2 text-xs font-semibold rounded-pill flex items-center gap-1.5 transition-all ${
+                className={`whitespace-nowrap px-4 py-2 text-xs font-semibold rounded-pill flex items-center gap-1.5 transition-all duration-200 ease-out active:scale-95 ${
                   isActive
-                    ? 'bg-white text-black border border-hairline font-semibold shadow-xs'
+                    ? 'bg-white text-black border border-hairline font-semibold shadow-xs scale-[1.02]'
                     : 'text-black/60 hover:text-black hover:bg-surface-soft border border-transparent'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className={`w-3.5 h-3.5 transition-transform duration-200 ${isActive ? 'scale-110 text-black' : 'text-black/40'}`} />
                 <span>{t.label}</span>
               </button>
             );
@@ -237,79 +237,81 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="max-w-[1280px] mx-auto w-full px-6 pb-16 flex-1 space-y-6">
-        {activeTab === 'chat' && (
-          <TripChatHub
-            activeTripId={activeTripId}
-            setActiveTripId={setActiveTripId}
-            trips={trips}
-            tripDetail={tripDetail}
-            itineraries={itineraries}
-            proposals={proposals}
-            slots={slots}
-            finances={finances}
-            currentUser={user}
-            onOpenAuth={() => setAuthOpen(true)}
-            onRefresh={refreshAll}
-            notify={notify}
-          />
-        )}
-        {activeTab === 'itinerary' && (
-          <PlannerSection
-            activeTripId={activeTripId}
-            tripDetail={tripDetail}
-            itineraries={itineraries}
-            slots={slots}
-            onRefresh={refreshAll}
-            notify={notify}
-          />
-        )}
-        {activeTab === 'tickets' && (
-          <OperatorSection
-            pois={pois}
-            slots={slots}
-            holds={holds}
-            onRefresh={refreshAll}
-            notify={notify}
-          />
-        )}
-        {activeTab === 'expenses' && (
-          <ExpensesSection
-            activeTripId={activeTripId}
-            tripDetail={tripDetail}
-            finances={finances}
-            onRefresh={refreshAll}
-            notify={notify}
-          />
-        )}
-        {activeTab === 'voting' && (
-          <VotingSection
-            activeTripId={activeTripId}
-            tripDetail={tripDetail}
-            proposals={proposals}
-            onRefresh={refreshAll}
-            notify={notify}
-          />
-        )}
-        {activeTab === 'saga' && (
-          <SagaSection
-            activeTripId={activeTripId}
-            itineraries={itineraries}
-            sagas={sagas}
-            onRefresh={refreshAll}
-            notify={notify}
-          />
-        )}
-        {activeTab === 'trips' && (
-          <TripsSection
-            trips={trips}
-            activeTripId={activeTripId}
-            setActiveTripId={setActiveTripId}
-            tripDetail={tripDetail}
-            allUsers={allUsers}
-            onRefresh={refreshAll}
-            notify={notify}
-          />
-        )}
+        <div key={activeTab} className="animate-tab-shift space-y-6">
+          {activeTab === 'chat' && (
+            <TripChatHub
+              activeTripId={activeTripId}
+              setActiveTripId={setActiveTripId}
+              trips={trips}
+              tripDetail={tripDetail}
+              itineraries={itineraries}
+              proposals={proposals}
+              slots={slots}
+              finances={finances}
+              currentUser={user}
+              onOpenAuth={() => setAuthOpen(true)}
+              onRefresh={refreshAll}
+              notify={notify}
+            />
+          )}
+          {activeTab === 'itinerary' && (
+            <PlannerSection
+              activeTripId={activeTripId}
+              tripDetail={tripDetail}
+              itineraries={itineraries}
+              slots={slots}
+              onRefresh={refreshAll}
+              notify={notify}
+            />
+          )}
+          {activeTab === 'tickets' && (
+            <OperatorSection
+              pois={pois}
+              slots={slots}
+              holds={holds}
+              onRefresh={refreshAll}
+              notify={notify}
+            />
+          )}
+          {activeTab === 'expenses' && (
+            <ExpensesSection
+              activeTripId={activeTripId}
+              tripDetail={tripDetail}
+              finances={finances}
+              onRefresh={refreshAll}
+              notify={notify}
+            />
+          )}
+          {activeTab === 'voting' && (
+            <VotingSection
+              activeTripId={activeTripId}
+              tripDetail={tripDetail}
+              proposals={proposals}
+              onRefresh={refreshAll}
+              notify={notify}
+            />
+          )}
+          {activeTab === 'saga' && (
+            <SagaSection
+              activeTripId={activeTripId}
+              itineraries={itineraries}
+              sagas={sagas}
+              onRefresh={refreshAll}
+              notify={notify}
+            />
+          )}
+          {activeTab === 'trips' && (
+            <TripsSection
+              trips={trips}
+              activeTripId={activeTripId}
+              setActiveTripId={setActiveTripId}
+              tripDetail={tripDetail}
+              allUsers={allUsers}
+              onRefresh={refreshAll}
+              notify={notify}
+            />
+          )}
+        </div>
 
         <div className="flex justify-end pt-4">
           <button

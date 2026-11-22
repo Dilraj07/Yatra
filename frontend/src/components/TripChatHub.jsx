@@ -379,31 +379,32 @@ export default function TripChatHub({
           <div className="bg-surface-soft border border-hairline rounded-2xl p-1.5 flex gap-1 shadow-2xs">
             <button
               onClick={() => setActiveTab('plan')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'plan' ? 'bg-white text-black font-semibold shadow-xs border border-hairline' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
+              className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all duration-200 ease-out active:scale-95 ${
+                activeTab === 'plan' ? 'bg-white text-black font-semibold shadow-xs border border-hairline scale-[1.01]' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
               }`}
             >
-              <Calendar className="w-3.5 h-3.5 text-blue-600" /> Plan & Schedule
+              <Calendar className={`w-3.5 h-3.5 transition-colors duration-200 ${activeTab === 'plan' ? 'text-blue-600' : 'text-black/40'}`} /> Plan & Schedule
             </button>
             <button
               onClick={() => setActiveTab('tickets')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'tickets' ? 'bg-white text-black font-semibold shadow-xs border border-hairline' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
+              className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all duration-200 ease-out active:scale-95 ${
+                activeTab === 'tickets' ? 'bg-white text-black font-semibold shadow-xs border border-hairline scale-[1.01]' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
               }`}
             >
-              <Ticket className="w-3.5 h-3.5 text-amber-600" /> Tickets
+              <Ticket className={`w-3.5 h-3.5 transition-colors duration-200 ${activeTab === 'tickets' ? 'text-amber-600' : 'text-black/40'}`} /> Tickets
             </button>
             <button
               onClick={() => setActiveTab('budget')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'budget' ? 'bg-white text-black font-semibold shadow-xs border border-hairline' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
+              className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all duration-200 ease-out active:scale-95 ${
+                activeTab === 'budget' ? 'bg-white text-black font-semibold shadow-xs border border-hairline scale-[1.01]' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
               }`}
             >
-              <Coins className="w-3.5 h-3.5 text-emerald-600" /> Budget & Split
+              <Coins className={`w-3.5 h-3.5 transition-colors duration-200 ${activeTab === 'budget' ? 'text-emerald-600' : 'text-black/40'}`} /> Budget & Split
             </button>
           </div>
 
-          {/* TAB 1: Plan & Schedule */}
+          <div key={activeTab} className="animate-tab-shift">
+            {/* TAB 1: Plan & Schedule */}
           {activeTab === 'plan' && (
             <div className="bg-white border border-hairline rounded-2xl p-5 space-y-4 shadow-xs">
               <div className="flex items-center justify-between pb-3 border-b border-hairline">
@@ -622,6 +623,7 @@ export default function TripChatHub({
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
