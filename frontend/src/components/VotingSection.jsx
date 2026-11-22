@@ -165,6 +165,21 @@ export default function VotingSection({
         )}
       </div>
 
+      {/* Demo helper tip */}
+      <div className="p-3.5 rounded-xl bg-purple-50/70 border border-purple-200 text-xs text-purple-900 flex items-start justify-between gap-3 shadow-2xs">
+        <div className="flex items-start gap-2.5">
+          <div className="p-1 rounded-full bg-purple-100 text-purple-700 shrink-0 mt-0.5">
+            <Vote className="w-3.5 h-3.5" />
+          </div>
+          <div>
+            <span className="font-bold block">How Group Voting works:</span>
+            <span className="text-[11px] text-purple-800/80">
+              Trip itineraries require at least 60% YES votes from registered travelers before they can be committed to the database. Use the <strong>Acting Voter dropdown</strong> above to vote as Dilraj, Arya, or Aarush and see the progress bar update live!
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Quorum Stats Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-hairline rounded-2xl p-4 shadow-xs">

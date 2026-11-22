@@ -31,10 +31,10 @@ import AuditSection from './components/AuditSection';
 
 const WORKSPACE_TABS = [
   { id: 'chat', label: 'Trip Workspace', icon: MessageSquare },
-  { id: 'radar', label: 'Live Radar', icon: Radio },
-  { id: 'voting', label: 'Quorum Approvals', icon: Vote },
-  { id: 'saga', label: 'Booking Saga (2PC)', icon: ShieldCheck },
-  { id: 'audit', label: 'Database Audit', icon: Database },
+  { id: 'radar', label: 'Live Flights & Hotels', icon: Radio },
+  { id: 'voting', label: 'Group Approvals', icon: Vote },
+  { id: 'saga', label: 'Booking Engine (2PC)', icon: ShieldCheck },
+  { id: 'audit', label: 'Database Logs', icon: Database },
   { id: 'trips', label: 'All Trips', icon: Compass },
 ];
 

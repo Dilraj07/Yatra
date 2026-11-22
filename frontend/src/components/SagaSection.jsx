@@ -186,17 +186,17 @@ export default function SagaSection({ activeTripId, itineraries = [], sagas = []
 
           <div>
             <label className="text-xs font-mono font-bold text-neutral-500 block mb-1">
-              SIMULATE FAILURE POINT (ROLLBACK TEST)
+              TESTING SCENARIO
             </label>
             <select
               className="w-full bg-surface-soft border border-hairline rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-black cursor-pointer"
               value={failurePoint}
               onChange={(e) => setFailurePoint(e.target.value)}
             >
-              <option value="">Normal (Confirm All Steps)</option>
-              <option value="FLIGHT">Fail at Flight API (Test Compensation Rollback)</option>
-              <option value="HOTEL">Fail at Hotel Booking (Test Compensation Rollback)</option>
-              <option value="PAYMENT">Fail at Payment Gateway (Full Rollback)</option>
+              <option value="">✅ Normal: Confirm All (Flights + Stays + Passes)</option>
+              <option value="FLIGHT">⚠️ Simulate Flight Timeout (Tests Auto-Rollback)</option>
+              <option value="HOTEL">⚠️ Simulate Hotel API Failure (Tests Auto-Rollback)</option>
+              <option value="PAYMENT">⚠️ Simulate Payment Decline (Tests Refund Compensation)</option>
             </select>
           </div>
 
@@ -207,10 +207,23 @@ export default function SagaSection({ activeTripId, itineraries = [], sagas = []
               className="btn-primary flex-1 py-2 px-3 text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
             >
               {failurePoint ? <RotateCcw className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-              <span>{running ? 'Executing Saga...' : failurePoint ? 'Simulate Rollback' : 'Execute 2PC Saga'}</span>
+              <span>{running ? 'Running...' : failurePoint ? 'Test Rollback' : 'Confirm Booking (2PC)'}</span>
             </button>
           </div>
         </form>
+
+        {/* Friendly explainer tip */}
+        <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-blue-900 flex items-start gap-2.5">
+          <div className="p-1 rounded-full bg-blue-100 text-blue-700 shrink-0 mt-0.5">
+            <ShieldCheck className="w-3.5 h-3.5" />
+          </div>
+          <div>
+            <span className="font-bold block">How Group Booking works:</span>
+            <span className="text-[11px] text-blue-800/80">
+              When you confirm, the system reserves your monument tickets, flights, and hotels in sequence. If any supplier is unavailable or payment fails, backward compensation releases all holds instantly so no money or seats are stuck.
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Sagas Execution History */}
