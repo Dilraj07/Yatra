@@ -205,6 +205,13 @@ export default function TripChatHub({
   const costPerPerson = Math.round(totalCost / memberCount);
   const primaryProposal = proposals?.[0] || null;
 
+  // Quorum & voting calculations
+  const quorumRequiredPct = tripDetail?.quorum_pct || primaryProposal?.quorum_pct || 60;
+  const currentApprovals = primaryProposal?.approve_count ?? primaryProposal?.yes_count ?? 0;
+  const totalVoters = primaryProposal?.member_count ?? primaryProposal?.total_voters ?? memberCount ?? 1;
+  const currentApprovalPct = primaryProposal?.approval_pct ?? Math.round((currentApprovals / (totalVoters || 1)) * 100);
+  const isQuorumMet = Boolean(primaryProposal?.quorum_met ?? (currentApprovals >= (primaryProposal?.required_votes ?? Math.ceil((totalVoters * quorumRequiredPct) / 100))));
+
   return (
     <div className="space-y-6">
       {/* Sleek Condensed Trip Header */}
@@ -463,8 +470,14 @@ export default function TripChatHub({
                   </p>
                 </div>
                 {primaryProposal && (
-                  <span className="text-xs px-2.5 py-1 rounded-pill font-mono bg-block-cream font-medium text-black border border-black/10">
-                    Quorum: {primaryProposal.approval_pct}%
+                  <span
+                    className={`text-xs px-2.5 py-1 rounded-pill font-mono font-medium border ${
+                      isQuorumMet
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : 'bg-amber-50 text-amber-800 border-amber-200'
+                    }`}
+                  >
+                    Quorum: {currentApprovalPct}% ({isQuorumMet ? 'Satisfied' : `${quorumRequiredPct}% Req`})
                   </span>
                 )}
               </div>
@@ -531,13 +544,15 @@ export default function TripChatHub({
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-black">Group Approval Progress</span>
                     <span className="font-mono font-bold text-black">
-                      {primaryProposal.approval_pct}% / {tripDetail?.quorum_pct || 60}% needed
+                      {currentApprovals} of {totalVoters} votes ({currentApprovalPct}%) · {quorumRequiredPct}% required
                     </span>
                   </div>
                   <div className="w-full bg-surface-soft h-2 rounded-full overflow-hidden border border-hairline">
                     <div
-                      className="bg-semantic-success h-full transition-all duration-500 rounded-full"
-                      style={{ width: `${Math.min(100, primaryProposal.approval_pct)}%` }}
+                      className={`h-full transition-all duration-500 rounded-full ${
+                        isQuorumMet ? 'bg-semantic-success' : 'bg-amber-500'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(0, currentApprovalPct))}%` }}
                     ></div>
                   </div>
                   <div className="flex gap-2 pt-1">

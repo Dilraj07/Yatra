@@ -106,24 +106,24 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
   }
 
   return (
-    <div className="color-block bg-block-cream space-y-6">
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6">
+      {/* Clean Modern Header Banner */}
+      <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-xs font-mono bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              LIVE AIRSPACE & HOTEL TELEMETRY
+              LIVE FLIGHT & HOTEL RADAR
             </span>
           </div>
-          <h2 className="display-lg mt-1">Real-Time Flights & Hotels Radar</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900 mt-2">Real-Time Indian Airspace & Stays</h2>
           <p className="text-xs text-neutral-500 max-w-2xl mt-1">
-            Live airspace tracking from OpenSky Network, verified accommodations from OpenStreetMap, and ground conditions from Open-Meteo.
+            Live ADS-B aircraft positions from OpenSky Network, verified hotels from OpenStreetMap, and satellite ground conditions from Open-Meteo.
           </p>
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          <label className="flex items-center gap-2 text-xs font-mono cursor-pointer select-none bg-surface-card px-3 py-1.5 rounded-md border border-hairline-soft">
+          <label className="flex items-center gap-2 text-xs font-mono cursor-pointer select-none bg-surface-soft px-3 py-1.5 rounded-lg border border-hairline text-slate-700">
             <input
               type="checkbox"
               checked={autoRefresh}
@@ -135,16 +135,16 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
           <button
             onClick={() => fetchLiveFeeds(selectedCity)}
             disabled={loading}
-            className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+            className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Refreshing...' : 'Ping Radar'}
+            {loading ? 'Refreshing...' : 'Ping Telemetry'}
           </button>
         </div>
       </div>
 
       {/* Destination Selector & Weather Bar */}
-      <div className="editorial-card space-y-4">
+      <div className="bg-white border border-hairline rounded-2xl p-5 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-mono font-bold text-muted mr-1">SECTOR:</span>

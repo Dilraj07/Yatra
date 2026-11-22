@@ -30,15 +30,12 @@ import LiveRadarSection from './components/LiveRadarSection';
 import AuditSection from './components/AuditSection';
 
 const WORKSPACE_TABS = [
-  { id: 'chat', label: 'Chat & Copilot', icon: MessageSquare },
-  { id: 'itinerary', label: 'Itinerary', icon: MapPin },
+  { id: 'chat', label: 'Trip Workspace', icon: MessageSquare },
   { id: 'radar', label: 'Live Radar', icon: Radio },
-  { id: 'tickets', label: 'Heritage Slots', icon: Ticket },
-  { id: 'expenses', label: 'Ledger & Expenses', icon: Wallet },
   { id: 'voting', label: 'Quorum Approvals', icon: Vote },
   { id: 'saga', label: 'Booking Saga (2PC)', icon: ShieldCheck },
   { id: 'audit', label: 'Database Audit', icon: Database },
-  { id: 'trips', label: 'Trips', icon: Compass },
+  { id: 'trips', label: 'All Trips', icon: Compass },
 ];
 
 export default function App() {
