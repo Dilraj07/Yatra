@@ -39,6 +39,22 @@ const MOCK_DATA = {
     nosql: 'MongoDB 7 (Supplier Cache)',
     active_holds: 4,
   },
+  '/api/audit/postgres-log': [
+    { audit_id: 104, partition_name: 'audit_log_2026_11', table_name: 'slot_hold', operation: 'INSERT', row_pk: '101', changed_at: '2026-11-22T10:05:00Z', after_img: { hold_id: 101, slot_id: 1, seats: 4, state: 'HELD' } },
+    { audit_id: 103, partition_name: 'audit_log_2026_11', table_name: 'saga_step', operation: 'INSERT', row_pk: '402', changed_at: '2026-11-22T10:04:30Z', after_img: { step_id: 402, step_type: 'CHARGE_PAYMENT', supplier_ref: 'pay_rzp_demo123', state: 'COMPLETED' } },
+    { audit_id: 102, partition_name: 'audit_log_2026_11', table_name: 'saga_step', operation: 'UPDATE', row_pk: '401', changed_at: '2026-11-22T10:04:15Z', before_img: { state: 'PENDING' }, after_img: { state: 'COMPLETED' } },
+    { audit_id: 101, partition_name: 'audit_log_2026_11', table_name: 'trips', operation: 'INSERT', row_pk: '1', changed_at: '2026-11-20T10:00:00Z', after_img: { trip_id: 1, title: 'Goa & Hampi Winter Heritage 2026', status: 'PROPOSED' } },
+  ],
+  '/api/audit/nosql-documents': {
+    supplier_snapshots: [
+      { _id: 'snap_001', provider: 'razorpay', action: 'create_order', mode: 'razorpay_test_api', captured_at: '2026-11-22T10:04:30Z', request: { amount_paise: 1840000, currency: 'INR' }, response: { id: 'order_rzp_mock123', status: 'created' } },
+      { _id: 'snap_002', provider: 'duffel', action: 'create_order', mode: 'duffel_sandbox_api', captured_at: '2026-11-22T10:04:35Z', request: { title: 'Air India BLR->GOI', est_cost_inr: 3400 }, response: { order_ref: 'duf_live_9f81a7', status: 'confirmed' } },
+      { _id: 'snap_003', provider: 'liteapi', action: 'book_hotel', mode: 'liteapi_sandbox_api', captured_at: '2026-11-22T10:04:40Z', request: { title: 'Palolem Beach Resort', est_cost_inr: 4800 }, response: { booking_ref: 'lite_live_83ad2e', status: 'confirmed' } },
+    ],
+    llm_conversations: [
+      { _id: 'conv_001', trip_id: 1, engine: 'gemini-1.5-pro', captured_at: '2026-11-22T10:02:00Z', prompt: 'Plan a 3-day Goa & Hampi trip under 25000 INR each', intent: { destination: 'Goa & Hampi', budget_per_person: 25000, members: 3 }, gist_check: 'PASSED' },
+    ],
+  },
   '/api/auth/users': [
     { user_id: 1, full_name: 'Dilraj Singh', email: 'dilraj@yatra.local', home_city: 'Bengaluru' },
     { user_id: 2, full_name: 'Arya Wadhwa', email: 'arya@yatra.local', home_city: 'Delhi' },

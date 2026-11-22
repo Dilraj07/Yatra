@@ -14,6 +14,7 @@ import {
   Vote,
   ShieldCheck,
   Radio,
+  Database,
 } from 'lucide-react';
 import { apiRequest, clearAuthSession, getStoredUser, setAuthSession } from './api/client';
 import AuthModal from './components/AuthModal';
@@ -26,6 +27,7 @@ import SagaSection from './components/SagaSection';
 import ExpensesSection from './components/ExpensesSection';
 import OperatorSection from './components/OperatorSection';
 import LiveRadarSection from './components/LiveRadarSection';
+import AuditSection from './components/AuditSection';
 
 const WORKSPACE_TABS = [
   { id: 'chat', label: 'Trip Chat & Copilot', icon: MessageSquare },
@@ -35,6 +37,7 @@ const WORKSPACE_TABS = [
   { id: 'expenses', label: 'Expenses & Split', icon: Wallet },
   { id: 'voting', label: 'Group Approvals', icon: Vote },
   { id: 'saga', label: 'Booking Engine', icon: ShieldCheck },
+  { id: 'audit', label: 'Database Logs & Audit', icon: Database },
   { id: 'trips', label: 'All Trips', icon: Compass },
 ];
 
@@ -57,6 +60,8 @@ export default function App() {
   const [pois, setPois] = useState([]);
   const [slots, setSlots] = useState([]);
   const [holds, setHolds] = useState([]);
+  const [auditRows, setAuditRows] = useState([]);
+  const [nosqlDocs, setNosqlDocs] = useState({ supplier_snapshots: [], llm_conversations: [] });
 
   // Track window scroll for smooth frosted-glass navbar blur
   useEffect(() => {
@@ -74,13 +79,15 @@ export default function App() {
   const refreshAll = useCallback(async (targetTripId) => {
     const tid = targetTripId || activeTripId;
     try {
-      const [sys, usersData, tripsData, poisData, slotsData, holdsData] = await Promise.all([
+      const [sys, usersData, tripsData, poisData, slotsData, holdsData, auditLogData, nosqlData] = await Promise.all([
         apiRequest('/api/audit/system-status'),
         apiRequest('/api/auth/users'),
         apiRequest('/api/trips'),
         apiRequest('/api/inventory/pois'),
         apiRequest('/api/inventory/slots'),
         apiRequest('/api/inventory/holds'),
+        apiRequest('/api/audit/postgres-log').catch(() => []),
+        apiRequest('/api/audit/nosql-documents').catch(() => ({})),
       ]);
       setStatus(sys);
       setAllUsers(usersData);
@@ -88,6 +95,8 @@ export default function App() {
       setPois(poisData);
       setSlots(slotsData);
       setHolds(holdsData);
+      setAuditRows(auditLogData || []);
+      setNosqlDocs(nosqlData || { supplier_snapshots: [], llm_conversations: [] });
 
       const resolvedTripId = tid || tripsData[0]?.trip_id;
       if (resolvedTripId) {
@@ -316,6 +325,12 @@ export default function App() {
               sagas={sagas}
               onRefresh={refreshAll}
               notify={notify}
+            />
+          )}
+          {activeTab === 'audit' && (
+            <AuditSection
+              auditRows={auditRows}
+              nosqlDocs={nosqlDocs}
             />
           )}
           {activeTab === 'trips' && (
