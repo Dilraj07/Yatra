@@ -305,6 +305,8 @@ export default function App() {
               activeTripId={activeTripId}
               tripDetail={tripDetail}
               proposals={proposals}
+              itineraries={itineraries}
+              currentUser={user}
               onRefresh={refreshAll}
               notify={notify}
             />
