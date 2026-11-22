@@ -296,15 +296,23 @@ export default function TripsSection({
           })}
 
           {trips.length === 0 && (
-            <div className="col-span-full bg-white border border-dashed border-hairline rounded-2xl p-12 text-center space-y-3">
-              <Compass className="w-10 h-10 text-neutral-300 mx-auto" />
-              <p className="text-sm font-semibold text-slate-700">No trips found in the database.</p>
-              <button
-                onClick={() => setSubTab('create')}
-                className="btn-primary text-xs py-2 px-4"
-              >
-                Create your first trip
-              </button>
+            <div className="col-span-full bg-white border border-dashed border-hairline rounded-2xl p-12 text-center space-y-3 shadow-xs">
+              <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center mx-auto">
+                <Compass className="w-6 h-6 text-slate-400" />
+              </div>
+              <h3 className="text-base font-bold text-slate-800">No previous trips</h3>
+              <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+                You do not have any previous or active group trips recorded yet.
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={() => setSubTab('create')}
+                  className="btn-primary text-xs py-2 px-4 cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Your First Trip</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

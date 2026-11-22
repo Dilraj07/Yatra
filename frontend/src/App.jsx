@@ -156,11 +156,15 @@ export default function App() {
               value={activeTripId}
               onChange={(e) => setActiveTripId(Number(e.target.value))}
             >
-              {trips.map((t) => (
-                <option key={t.trip_id} value={t.trip_id}>
-                  Trip #{t.trip_id}: {t.title}
-                </option>
-              ))}
+              {trips.length === 0 ? (
+                <option value="">No previous trips</option>
+              ) : (
+                trips.map((t) => (
+                  <option key={t.trip_id} value={t.trip_id}>
+                    Trip #{t.trip_id}: {t.title}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
