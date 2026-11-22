@@ -1,0 +1,72 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: yatra_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-yatra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yatra_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-yatra_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - yatra_pg_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-yatra} -d ${POSTGRES_DB:-yatra_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    container_name: yatra_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - yatra_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: yatra_backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-yatra}:${POSTGRES_PASSWORD:-yatra_secret}@postgres:5432/${POSTGRES_DB:-yatra_db}
+      MONGO_URL: mongodb://mongo:27017
+      MONGO_DB: ${MONGO_DB:-yatra_nosql}
+      JWT_SECRET: ${JWT_SECRET:-yatra-dev-jwt-secret-change-in-production}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      DUFFEL_API_KEY: ${DUFFEL_API_KEY:-}
+      LITEAPI_KEY: ${LITEAPI_KEY:-}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: yatra_frontend
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  yatra_pg_data:
+  yatra_mongo_data:

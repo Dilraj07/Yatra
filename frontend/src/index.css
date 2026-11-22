@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, -apple-system, Helvetica, sans-serif;
+    font-feature-settings: "kern" 1;
+    color: #000000;
+    background-color: #ffffff;
+  }
+}
+
+@layer components {
+  .display-lg {
+    font-size: clamp(1.85rem, 3.4vw, 3rem);
+    font-weight: 300;
+    line-height: 1.08;
+    letter-spacing: -0.015em;
+  }
+  .editorial-subhead {
+    font-size: 1.125rem;
+    font-weight: 300;
+    line-height: 1.45;
+  }
+  .eyebrow-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .caption-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-black text-white hover:bg-neutral-800 rounded-pill px-5 py-2.5 text-[14px] font-medium transition-all active:scale-[0.98] disabled:opacity-40;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 bg-white text-black hover:bg-surface-soft rounded-pill px-5 py-2.5 text-[14px] font-medium border border-hairline transition-all active:scale-[0.98] disabled:opacity-40;
+  }
+  .btn-magenta {
+    @apply inline-flex items-center justify-center gap-2 bg-accent-magenta text-white hover:opacity-90 rounded-pill px-5 py-2.5 text-[14px] font-medium transition-all active:scale-[0.98] disabled:opacity-40;
+  }
+  .field-input {
+    @apply w-full bg-white text-black border border-hairline rounded-md px-3.5 py-2.5 text-[14px] focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-all;
+  }
+  .color-block {
+    @apply w-full rounded-none md:rounded-lg px-6 py-8 md:px-10 md:py-10;
+  }
+  .editorial-card {
+    @apply bg-white text-black border border-hairline rounded-lg p-6;
+  }
+}
