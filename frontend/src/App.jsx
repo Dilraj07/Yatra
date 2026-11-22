@@ -30,15 +30,15 @@ import LiveRadarSection from './components/LiveRadarSection';
 import AuditSection from './components/AuditSection';
 
 const WORKSPACE_TABS = [
-  { id: 'chat', label: 'Trip Chat & Copilot', icon: MessageSquare },
-  { id: 'itinerary', label: 'Itinerary Details', icon: MapPin },
-  { id: 'radar', label: 'Live Travel Radar', icon: Radio },
-  { id: 'tickets', label: 'Heritage Tickets', icon: Ticket },
-  { id: 'expenses', label: 'Expenses & Split', icon: Wallet },
-  { id: 'voting', label: 'Group Approvals', icon: Vote },
-  { id: 'saga', label: 'Booking Engine', icon: ShieldCheck },
-  { id: 'audit', label: 'Database Logs & Audit', icon: Database },
-  { id: 'trips', label: 'All Trips', icon: Compass },
+  { id: 'chat', label: 'Chat & Copilot', icon: MessageSquare },
+  { id: 'itinerary', label: 'Itinerary', icon: MapPin },
+  { id: 'radar', label: 'Live Radar', icon: Radio },
+  { id: 'tickets', label: 'Heritage Slots', icon: Ticket },
+  { id: 'expenses', label: 'Ledger & Expenses', icon: Wallet },
+  { id: 'voting', label: 'Quorum Approvals', icon: Vote },
+  { id: 'saga', label: 'Booking Saga (2PC)', icon: ShieldCheck },
+  { id: 'audit', label: 'Database Audit', icon: Database },
+  { id: 'trips', label: 'Trips', icon: Compass },
 ];
 
 export default function App() {
@@ -169,15 +169,9 @@ export default function App() {
 
           <div className="flex items-center gap-3">
             {/* Database Engine Status Badge */}
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-mono font-medium bg-emerald-50 border border-emerald-200 text-emerald-800 shadow-2xs">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-mono font-medium bg-emerald-50 border border-emerald-200 text-emerald-800 shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>PostgreSQL 16 · GiST & ACID</span>
-            </div>
-
-            {/* AI Copilot Status Badge */}
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-medium bg-purple-50 border border-purple-200 text-purple-900 shadow-2xs">
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              <span>Copilot Ready</span>
             </div>
 
             {/* Refresh Button */}
@@ -344,15 +338,6 @@ export default function App() {
               notify={notify}
             />
           )}
-        </div>
-
-        <div className="flex justify-end pt-4">
-          <button
-            onClick={() => setActiveTab(nextTab.id)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-surface-soft border border-hairline hover:bg-hairline transition-colors"
-          >
-            Next: {nextTab.label} <ArrowRight className="w-3.5 h-3.5" />
-          </button>
         </div>
       </main>
 

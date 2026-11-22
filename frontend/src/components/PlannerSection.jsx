@@ -3,15 +3,15 @@ import { Sparkles, CalendarClock } from 'lucide-react';
 import { apiRequest } from '../api/client';
 
 export default function PlannerSection({ activeTripId, tripDetail, itineraries, slots, onRefresh, notify }) {
-  const [prompt, setPrompt] = useState('Plan a 2-day Agra group trip with Taj Mahal Night Viewing under 16000 INR');
+  const [prompt, setPrompt] = useState('Plan a 3-day Goa & Hampi trip with Virupaksha heritage viewing under 25000 INR');
   const [injectOverlap, setInjectOverlap] = useState(true);
   const [aiTrace, setAiTrace] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const [legTitle, setLegTitle] = useState('Overlapping Walk (Test Rule #4 GiST)');
+  const [legTitle, setLegTitle] = useState('Palolem Beach Kayaking & Heritage Tour');
   const [spanStart, setSpanStart] = useState('2026-12-18T08:00');
   const [spanEnd, setSpanEnd] = useState('2026-12-18T09:30');
-  const [legCost, setLegCost] = useState(1000);
+  const [legCost, setLegCost] = useState(1200);
 
   async function handleAiDraft(e) {
     e.preventDefault();

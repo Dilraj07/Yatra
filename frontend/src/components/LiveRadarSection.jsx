@@ -111,16 +111,14 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="eyebrow-mono">ZERO-AUTH LIVE FEEDS</span>
-            <span className="inline-flex items-center gap-1 text-[11px] font-mono bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-bold">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              LIVE RADAR
+            <span className="inline-flex items-center gap-1.5 text-xs font-mono bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              LIVE AIRSPACE & HOTEL TELEMETRY
             </span>
           </div>
-          <h2 className="display-lg mt-1">Real-Time Flights & Hotels Telemetry</h2>
-          <p className="text-xs text-muted max-w-2xl mt-1">
-            Zero API keys, zero login IDs, zero expiring credentials. Real airspace radar from{' '}
-            <strong>OpenSky Network</strong>, verified hotels from <strong>OpenStreetMap / Photon</strong>, and live satellite weather from <strong>Open-Meteo</strong>.
+          <h2 className="display-lg mt-1">Real-Time Flights & Hotels Radar</h2>
+          <p className="text-xs text-neutral-500 max-w-2xl mt-1">
+            Live airspace tracking from OpenSky Network, verified accommodations from OpenStreetMap, and ground conditions from Open-Meteo.
           </p>
         </div>
 

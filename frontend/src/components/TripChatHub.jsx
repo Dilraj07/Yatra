@@ -125,18 +125,6 @@ export default function TripChatHub({
     }
   };
 
-  // Clean suggestion prompts (Zero emojis)
-  const suggestionPills = [
-    'Include Taj Mahal Night Viewing batch on Dec 18',
-    'Aim to keep total per-person budget under ₹15,000',
-    'Add Agra Fort Royal Circuit morning tour',
-    'Note: Group requires vegetarian dining options',
-  ];
-
-  const handleSuggestionClick = (pill) => {
-    setInputText(pill);
-  };
-
   // Vote on active proposal
   const handleVote = async (proposalId, choice) => {
     if (!currentUser) {
@@ -219,51 +207,53 @@ export default function TripChatHub({
 
   return (
     <div className="space-y-6">
-      {/* Trip Header Banner */}
-      <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-semibold uppercase tracking-wider bg-block-lime text-black border border-black/10">
-                <Compass className="w-3.5 h-3.5" /> Group Trip
-              </span>
-              <span className="text-xs font-mono px-2.5 py-0.5 rounded-pill bg-surface-soft border border-hairline text-black/70">
-                {tripDetail?.status || 'Active'}
-              </span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-black">
-              {tripDetail?.title || 'Trip Discussion'}
-            </h1>
-            <div className="flex flex-wrap items-center gap-4 text-xs text-black/60 pt-0.5">
-              <span className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-black/40" />{' '}
-                {tripDetail?.travel_window
-                  ? String(tripDetail.travel_window).replace(/[[\]()"]/g, '').split(',').join(' to ')
-                  : 'Dec 18 - 20, 2026'}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-black/40" /> {memberCount} Travelers
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Vote className="w-3.5 h-3.5 text-black/40" /> Quorum: {tripDetail?.quorum_pct || 60}%
-              </span>
-            </div>
+      {/* Sleek Condensed Trip Header */}
+      <div className="bg-white border border-hairline rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
+              Trip #{tripDetail?.trip_id || activeTripId}
+            </span>
+            <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+              {tripDetail?.status || 'Active'}
+            </span>
+            <span className="text-xs text-neutral-300">·</span>
+            <span className="text-xs text-neutral-500">
+              Quorum: {tripDetail?.quorum_pct || 60}% YES required
+            </span>
+            <span className="text-xs text-neutral-300">·</span>
+            <span className="text-xs text-neutral-500">
+              {tripDetail?.travel_window
+                ? String(tripDetail.travel_window).replace(/[[\]()"]/g, '').split(',').join(' → ')
+                : 'Dec 18 → 22, 2026'}
+            </span>
           </div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+            {tripDetail?.title || 'Goa & Hampi Winter Heritage 2026'}
+          </h1>
         </div>
 
-        {/* Informational Member Badges */}
-        <div className="flex flex-wrap items-center gap-2 pt-4 mt-4 border-t border-hairline">
-          <span className="text-xs font-medium text-black/50 mr-1">Travelers in this trip:</span>
-          {(tripDetail?.members || []).map((m) => (
-            <div
-              key={m.user_id}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs bg-surface-soft text-black border border-hairline font-medium"
-            >
-              <span className="w-2 h-2 rounded-full bg-semantic-success"></span>
-              <span>{m.full_name}</span>
-              <span className="text-[10px] text-black/50 capitalize">({m.role?.toLowerCase()})</span>
-            </div>
-          ))}
+        {/* Compact Travelers List */}
+        <div className="flex items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-hairline shrink-0">
+          <span className="text-xs text-neutral-400 font-medium mr-1">Travelers:</span>
+          <div className="flex items-center -space-x-1.5">
+            {(tripDetail?.members || []).map((m) => {
+              const meta = (m.full_name || '').toLowerCase().includes('dilraj')
+                ? { initials: 'DS', bg: 'bg-purple-100 text-purple-800 border-purple-200' }
+                : (m.full_name || '').toLowerCase().includes('arya')
+                ? { initials: 'AW', bg: 'bg-sky-100 text-sky-800 border-sky-200' }
+                : { initials: 'AL', bg: 'bg-amber-100 text-amber-800 border-amber-200' };
+              return (
+                <div
+                  key={m.user_id}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-white shadow-xs ${meta.bg}`}
+                  title={`${m.full_name} (${m.role})`}
+                >
+                  {meta.initials}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -279,7 +269,7 @@ export default function TripChatHub({
               </div>
               <div>
                 <h2 className="text-sm font-bold text-black">Trip Group Chat</h2>
-                <p className="text-xs text-black/60">Discuss destinations, budgets, and plans</p>
+                <p className="text-xs text-black/60">Collaborate with Aarush, Arya, Dilraj, and Yatra Copilot</p>
               </div>
             </div>
 
@@ -291,20 +281,6 @@ export default function TripChatHub({
               <Sparkles className="w-3.5 h-3.5 text-purple-600" />
               {analyzing ? 'Analyzing...' : 'Synthesize Plan'}
             </button>
-          </div>
-
-          {/* Quick Suggestion Pills */}
-          <div className="p-2.5 bg-surface-soft/40 border-b border-hairline flex items-center gap-2 overflow-x-auto no-scrollbar">
-            <span className="text-[11px] font-medium text-black/50 whitespace-nowrap pl-1">Quick Ideas:</span>
-            {suggestionPills.map((pill, i) => (
-              <button
-                key={i}
-                onClick={() => handleSuggestionClick(pill)}
-                className="whitespace-nowrap px-3 py-1 rounded-pill text-[11px] bg-white border border-hairline hover:border-black text-black/80 transition-colors shadow-2xs"
-              >
-                {pill}
-              </button>
-            ))}
           </div>
 
           {/* Chat Message Stream (Soft surface-soft: #f7f7f5 from design system) */}

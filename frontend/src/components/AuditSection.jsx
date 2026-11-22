@@ -7,7 +7,7 @@ export default function AuditSection({ auditRows, nosqlDocs }) {
   return (
     <div className="color-block bg-block-pink space-y-6">
       <div>
-        <span className="eyebrow-mono">STEP 7 · PARTITIONED AUDIT LOG & MONGODB</span>
+        <span className="eyebrow-mono">PARTITIONED AUDIT LOG & MONGODB SNAPSHOTS</span>
         <h2 className="display-lg mt-1">Inspect relational triggers and NoSQL snapshots.</h2>
       </div>
 
