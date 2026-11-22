@@ -333,6 +333,8 @@ export default function App() {
               setActiveTripId={setActiveTripId}
               tripDetail={tripDetail}
               allUsers={allUsers}
+              currentUser={user}
+              onNavigateTab={(tab) => setActiveTab(tab)}
               onRefresh={refreshAll}
               notify={notify}
             />
