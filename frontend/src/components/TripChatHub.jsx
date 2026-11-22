@@ -234,10 +234,19 @@ export default function TripChatHub({
                 ? String(tripDetail.travel_window).replace(/[[\]()"]/g, '').split(',').join(' → ')
                 : 'Dec 18 → 22, 2026'}
             </span>
+            <span className="text-xs text-neutral-300">·</span>
+            <span className="text-xs font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+              25 Days to Departure · Goa (GOI)
+            </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
             {tripDetail?.title || 'Goa & Hampi Winter Heritage 2026'}
           </h1>
+          <div className="flex items-center gap-2 text-xs text-neutral-500 pt-0.5">
+            <span className="font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">26.5°C Clear Skies</span>
+            <span>·</span>
+            <span>Route: Bengaluru ✈️ Goa 🏖️ Hampi 🏛️ Bengaluru</span>
+          </div>
         </div>
 
         {/* Compact Travelers List */}
@@ -387,6 +396,34 @@ export default function TripChatHub({
               );
             })}
           </div>
+
+          {/* Quick Context Action Chips */}
+          {currentUser && (
+            <div className="px-3 pt-2 pb-1 bg-white border-t border-hairline/60 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px]">
+              <span className="text-[10px] font-mono text-neutral-400 font-bold shrink-0 mr-0.5">COPILOT:</span>
+              <button
+                type="button"
+                onClick={() => setInputText('Include Taj Mahal night viewing batch on Dec 18')}
+                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-slate-100 border border-hairline text-slate-700 transition-colors cursor-pointer"
+              >
+                ⚡ Taj Mahal Night Batch
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputText('Aim to keep total per-person budget under ₹15,000')}
+                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-slate-100 border border-hairline text-slate-700 transition-colors cursor-pointer"
+              >
+                💰 Budget &lt; ₹15,000
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputText('Ensure Hampi Virupaksha sunset timed slot is reserved')}
+                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-slate-100 border border-hairline text-slate-700 transition-colors cursor-pointer"
+              >
+                🏛️ Reserve Hampi Sunset
+              </button>
+            </div>
+          )}
 
           {/* Chat Input Bar or Authentication Lock */}
           {currentUser ? (
