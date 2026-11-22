@@ -231,7 +231,7 @@ export default function TripChatHub({
             <button
               onClick={handleAnalyzeChat}
               disabled={analyzing}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-pill text-xs font-semibold bg-black hover:bg-neutral-800 text-white active:scale-95 transition-all shadow-xs disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-pill text-xs font-bold bg-block-lime hover:bg-[#cde499] text-black border border-black/15 active:scale-95 transition-all shadow-xs disabled:opacity-40"
             >
               <Sparkles className="w-3.5 h-3.5 text-accent-magenta" />
               {analyzing ? 'Analyzing...' : 'Synthesize Plan'}
@@ -266,8 +266,8 @@ export default function TripChatHub({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center">
-                          <Bot className="w-3.5 h-3.5 text-accent-magenta" />
+                        <div className="w-6 h-6 rounded-full bg-block-lime border border-black/15 text-black flex items-center justify-center">
+                          <Bot className="w-3.5 h-3.5 text-black" />
                         </div>
                         <span className="text-xs font-bold text-black">Yatra Copilot</span>
                         <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-pill bg-white text-black/80 font-medium border border-hairline">
@@ -322,7 +322,7 @@ export default function TripChatHub({
                   <div
                     className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-2xs ${
                       isMe
-                        ? 'bg-black text-white rounded-tr-xs'
+                        ? 'bg-block-lime/80 border border-black/15 text-black rounded-tr-xs font-medium'
                         : 'bg-white border border-hairline text-black rounded-tl-xs'
                     }`}
                   >
@@ -346,7 +346,7 @@ export default function TripChatHub({
               <button
                 type="submit"
                 disabled={sending || !inputText.trim()}
-                className="w-9 h-9 rounded-full bg-black hover:bg-neutral-800 text-white flex items-center justify-center shrink-0 disabled:opacity-40 active:scale-95 transition-all shadow-xs"
+                className="w-9 h-9 rounded-full bg-block-lime hover:bg-[#cde499] text-black border border-black/15 flex items-center justify-center shrink-0 disabled:opacity-40 active:scale-95 transition-all shadow-xs"
               >
                 <Send className="w-4 h-4" />
               </button>
@@ -380,7 +380,7 @@ export default function TripChatHub({
             <button
               onClick={() => setActiveTab('plan')}
               className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'plan' ? 'bg-black text-white shadow-xs' : 'text-black/60 hover:text-black hover:bg-surface-soft'
+                activeTab === 'plan' ? 'bg-block-lime text-black border border-black/15 font-bold shadow-2xs' : 'text-black/60 hover:text-black hover:bg-surface-soft border border-transparent'
               }`}
             >
               <Calendar className="w-3.5 h-3.5" /> Plan & Schedule
@@ -388,7 +388,7 @@ export default function TripChatHub({
             <button
               onClick={() => setActiveTab('tickets')}
               className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'tickets' ? 'bg-black text-white shadow-xs' : 'text-black/60 hover:text-black hover:bg-surface-soft'
+                activeTab === 'tickets' ? 'bg-block-lime text-black border border-black/15 font-bold shadow-2xs' : 'text-black/60 hover:text-black hover:bg-surface-soft border border-transparent'
               }`}
             >
               <Ticket className="w-3.5 h-3.5" /> Tickets
@@ -396,7 +396,7 @@ export default function TripChatHub({
             <button
               onClick={() => setActiveTab('budget')}
               className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all ${
-                activeTab === 'budget' ? 'bg-black text-white shadow-xs' : 'text-black/60 hover:text-black hover:bg-surface-soft'
+                activeTab === 'budget' ? 'bg-block-lime text-black border border-black/15 font-bold shadow-2xs' : 'text-black/60 hover:text-black hover:bg-surface-soft border border-transparent'
               }`}
             >
               <Coins className="w-3.5 h-3.5" /> Budget & Split
@@ -487,14 +487,14 @@ export default function TripChatHub({
                   </div>
                   <div className="w-full bg-surface-soft h-2 rounded-full overflow-hidden border border-hairline">
                     <div
-                      className="bg-black h-full transition-all duration-500"
+                      className="bg-semantic-success h-full transition-all duration-500 rounded-full"
                       style={{ width: `${Math.min(100, primaryProposal.approval_pct)}%` }}
                     ></div>
                   </div>
                   <div className="flex gap-2 pt-1">
                     <button
                       onClick={() => handleVote(primaryProposal.proposal_id, 'APPROVE')}
-                      className="flex-1 py-2 px-3 rounded-xl bg-black text-white font-medium text-xs flex items-center justify-center gap-1.5 hover:bg-neutral-800 active:scale-95 transition-all shadow-xs"
+                      className="flex-1 py-2 px-3 rounded-xl bg-block-lime hover:bg-[#cde499] text-black font-bold text-xs flex items-center justify-center gap-1.5 border border-black/15 active:scale-95 transition-all shadow-xs"
                     >
                       <Check className="w-3.5 h-3.5" /> Approve Proposal
                     </button>

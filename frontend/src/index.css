@@ -38,7 +38,7 @@
     letter-spacing: 0.05em;
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 bg-black text-white hover:bg-neutral-800 rounded-pill px-5 py-2.5 text-[14px] font-medium transition-all active:scale-[0.98] disabled:opacity-40;
+    @apply inline-flex items-center justify-center gap-2 bg-block-lime hover:bg-[#cde499] text-black border border-black/15 rounded-pill px-5 py-2.5 text-[14px] font-bold transition-all active:scale-[0.98] disabled:opacity-40 shadow-sm;
   }
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-2 bg-white text-black hover:bg-surface-soft rounded-pill px-5 py-2.5 text-[14px] font-medium border border-hairline transition-all active:scale-[0.98] disabled:opacity-40;
