@@ -13,6 +13,7 @@ import {
   Wallet,
   Vote,
   ShieldCheck,
+  Radio,
 } from 'lucide-react';
 import { apiRequest, clearAuthSession, getStoredUser, setAuthSession } from './api/client';
 import AuthModal from './components/AuthModal';
@@ -24,10 +25,12 @@ import VotingSection from './components/VotingSection';
 import SagaSection from './components/SagaSection';
 import ExpensesSection from './components/ExpensesSection';
 import OperatorSection from './components/OperatorSection';
+import LiveRadarSection from './components/LiveRadarSection';
 
 const WORKSPACE_TABS = [
   { id: 'chat', label: 'Trip Chat & Copilot', icon: MessageSquare },
   { id: 'itinerary', label: 'Itinerary Details', icon: MapPin },
+  { id: 'radar', label: 'Live Travel Radar', icon: Radio },
   { id: 'tickets', label: 'Heritage Tickets', icon: Ticket },
   { id: 'expenses', label: 'Expenses & Split', icon: Wallet },
   { id: 'voting', label: 'Group Approvals', icon: Vote },
@@ -260,6 +263,14 @@ export default function App() {
               tripDetail={tripDetail}
               itineraries={itineraries}
               slots={slots}
+              onRefresh={refreshAll}
+              notify={notify}
+            />
+          )}
+          {activeTab === 'radar' && (
+            <LiveRadarSection
+              activeTripId={activeTripId}
+              tripDetail={tripDetail}
               onRefresh={refreshAll}
               notify={notify}
             />

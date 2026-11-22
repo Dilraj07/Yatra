@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.db import close_db, init_db
 from app.core.exceptions import DomainError, domain_error_handler, psycopg_error_handler
-from app.routers import audit, auth, chat, expenses, inventory, itineraries, saga, trips, voting
+from app.routers import audit, auth, chat, expenses, inventory, itineraries, radar, saga, trips, voting
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
 logger = logging.getLogger("yatra.api")
@@ -58,6 +58,7 @@ app.include_router(inventory.router)
 app.include_router(itineraries.router)
 app.include_router(voting.router)
 app.include_router(saga.router)
+app.include_router(radar.router)
 app.include_router(expenses.router)
 app.include_router(audit.router)
 
