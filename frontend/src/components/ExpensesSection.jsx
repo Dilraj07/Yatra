@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, CreditCard } from 'lucide-react';
 import { apiRequest } from '../api/client';
+import { openRazorpayCheckout } from '../api/payment';
 
 export default function ExpensesSection({ activeTripId, tripDetail, finances, onRefresh, notify }) {
   const [description, setDescription] = useState('');
@@ -59,7 +60,29 @@ export default function ExpensesSection({ activeTripId, tripDetail, finances, on
             {(finances?.settlements || []).map((s, idx) => (
               <div key={idx} className="flex items-center justify-between rounded-md bg-surface-soft px-4 py-2.5 text-sm">
                 <span className="flex items-center gap-2 font-medium">{s.from_name} <ArrowRight className="w-4 h-4" /> {s.to_name}</span>
-                <span className="font-mono font-bold">INR {Number(s.amount_inr).toLocaleString()}</span>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono font-bold">INR {Number(s.amount_inr).toLocaleString()}</span>
+                  <button
+                    onClick={() => {
+                      openRazorpayCheckout({
+                        amountInr: Number(s.amount_inr),
+                        title: `Debt Clearance: ${s.from_name} to ${s.to_name}`,
+                        description: `Trip #${activeTripId} Balanced Settlement`,
+                        customerName: s.from_name,
+                        onSuccess: (paymentDetails) => {
+                          notify('success', `Settlement INR ${Number(s.amount_inr).toLocaleString()} settled (${paymentDetails.payment_id}).`);
+                          if (onRefresh) onRefresh(activeTripId);
+                        },
+                        onFailure: (err) => {
+                          notify('error', `Settlement payment declined: ${err.description || 'Simulated error'}`);
+                        },
+                      });
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs py-1 px-2.5 rounded flex items-center gap-1 transition-all shadow-xs active:scale-95 cursor-pointer"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" /> Settle
+                  </button>
+                </div>
               </div>
             ))}
           </div>

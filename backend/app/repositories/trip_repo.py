@@ -106,6 +106,16 @@ def get_trip_detail(trip_id: int) -> dict[str, Any] | None:
         return {"trip": _FALLBACK_TRIP, "members": list(_LIVE_MEMBERS_STORE), "constraints": []}
 
 
+def get_trip(trip_id: int) -> dict[str, Any] | None:
+    detail = get_trip_detail(trip_id)
+    if not detail:
+        return None
+    trip_dict = dict(detail.get("trip") or {})
+    trip_dict["members"] = detail.get("members", [])
+    trip_dict["constraints"] = detail.get("constraints", [])
+    return trip_dict
+
+
 def add_member(trip_id: int, user_id: int, role: str, budget_ceiling: float, joining_city: str) -> dict[str, Any]:
     try:
         with get_pg_conn() as conn:

@@ -49,18 +49,32 @@ def _format_msg(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 def _seed_initial_trip_messages(trip_id: int) -> list[dict[str, Any]]:
-    mongo = get_mongo_db()
-    with get_pg_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT title, travel_window FROM trip WHERE trip_id = %s", (trip_id,))
-            trip_row = cur.fetchone()
-            cur.execute(
-                "SELECT u.user_id, u.full_name, tm.role, tm.budget_ceiling "
-                "FROM trip_member tm JOIN app_user u ON u.user_id = tm.user_id "
-                "WHERE tm.trip_id = %s ORDER BY tm.role DESC, tm.user_id ASC",
-                (trip_id,),
-            )
-            members = cur.fetchall()
+    mongo = None
+    try:
+        mongo = get_mongo_db()
+    except Exception:
+        pass
+
+    trip_row = None
+    members = []
+    try:
+        with get_pg_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT title, travel_window FROM trip WHERE trip_id = %s", (trip_id,))
+                trip_row = cur.fetchone()
+                cur.execute(
+                    "SELECT u.user_id, u.full_name, tm.role, tm.budget_ceiling "
+                    "FROM trip_member tm JOIN app_user u ON u.user_id = tm.user_id "
+                    "WHERE tm.trip_id = %s ORDER BY tm.role DESC, tm.user_id ASC",
+                    (trip_id,),
+                )
+                members = cur.fetchall()
+    except Exception:
+        from app.repositories.trip_repo import get_trip
+        t_data = get_trip(trip_id)
+        if t_data:
+            trip_row = {"title": t_data.get("title", "Goa & Hampi Winter Heritage 2026")}
+            members = t_data.get("members", [])
 
     trip_title = trip_row["title"] if trip_row else "Group Trip"
     organizer = members[0]["full_name"] if members else "Dilraj Singh"
@@ -344,12 +358,21 @@ def analyze_and_update_plan(
     total_cost = sum(float(l.get("est_cost_inr", 0)) for l in legs)
 
     # Fetch trip members to calculate per-person budget
-    with get_pg_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) AS member_count FROM trip_member WHERE trip_id = %s", (trip_id,))
-            m_count = cur.fetchone()["member_count"] or 1
-            cur.execute("SELECT * FROM slot_availability WHERE city = %s ORDER BY window_start ASC LIMIT 4", (city,))
-            sample_slots = cur.fetchall()
+    m_count = 3
+    sample_slots = []
+    try:
+        with get_pg_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) AS member_count FROM trip_member WHERE trip_id = %s", (trip_id,))
+                m_count = cur.fetchone()["member_count"] or 1
+                cur.execute("SELECT * FROM slot_availability WHERE city = %s ORDER BY window_start ASC LIMIT 4", (city,))
+                sample_slots = cur.fetchall()
+    except Exception:
+        from app.repositories import inventory_repo, trip_repo
+        t_data = trip_repo.get_trip(trip_id)
+        if t_data and "members" in t_data:
+            m_count = len(t_data["members"])
+        sample_slots = [s for s in inventory_repo.list_slots() if s.get("city") == city or city in s.get("circuit", "")]
 
     per_person_est = round(total_cost / max(m_count, 1), 2)
     budget_delta = round(target_budget - per_person_est, 2)

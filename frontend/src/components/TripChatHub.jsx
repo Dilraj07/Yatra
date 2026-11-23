@@ -878,7 +878,29 @@ export default function TripChatHub({
                         <ArrowRight className="w-3.5 h-3.5 text-black/40" />
                         <span className="font-semibold">{s.to_name}</span>
                       </div>
-                      <span className="font-mono font-bold text-black">₹{Number(s.amount_inr).toLocaleString()}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-black">₹{Number(s.amount_inr).toLocaleString()}</span>
+                        <button
+                          onClick={() => {
+                            openRazorpayCheckout({
+                              amountInr: Number(s.amount_inr),
+                              title: `Split Settlement: ${s.from_name} to ${s.to_name}`,
+                              description: `Trip #${activeTripId} Debt Clearance`,
+                              customerName: s.from_name,
+                              onSuccess: (paymentDetails) => {
+                                notify('success', `Settlement ₹${Number(s.amount_inr).toLocaleString()} cleared (${paymentDetails.payment_id}). Ledger balance updated!`);
+                                if (onRefresh) onRefresh(activeTripId);
+                              },
+                              onFailure: (err) => {
+                                notify('error', `Settlement declined: ${err.description || 'Simulated decline'}`);
+                              },
+                            });
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] py-1 px-2.5 rounded-pill flex items-center gap-1 transition-all shadow-xs active:scale-95 cursor-pointer"
+                        >
+                          <CreditCard className="w-3 h-3" /> Settle
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
