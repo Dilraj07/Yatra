@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, UserCheck, Key, Sparkles, Check, ArrowRight } from 'lucide-react';
-import { SignIn, SignUp, useUser, useClerk } from '@clerk/react';
-import { apiRequest, setAuthSession, clerkSync } from '../api/client';
+import { X, Check } from 'lucide-react';
+import { SignIn, useUser, useClerk } from '@clerk/react';
+import { apiRequest, setAuthSession } from '../api/client';
 
 export default function AuthModal({ open, onClose, onAuthSuccess, hasClerk = true }) {
   const [activeTab, setActiveTab] = useState('clerk'); // 'clerk' | 'demo'
-  const [clerkMode, setClerkMode] = useState('signin'); // 'signin' | 'signup'
 
   // Demo account states
   const [demoMode, setDemoMode] = useState('login');
@@ -62,7 +61,7 @@ export default function AuthModal({ open, onClose, onAuthSuccess, hasClerk = tru
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="w-full max-w-lg bg-white rounded-2xl border border-hairline shadow-2xl p-6 sm:p-7 relative my-8 max-h-[90vh] overflow-y-auto no-scrollbar">
+      <div className="w-full max-w-md bg-white rounded-2xl border border-hairline shadow-2xl p-6 sm:p-7 relative my-8 max-h-[90vh] overflow-y-auto no-scrollbar">
         {/* Modal Header */}
         <div className="flex items-center justify-between mb-5 pb-3 border-b border-hairline">
           <div>
@@ -144,74 +143,34 @@ export default function AuthModal({ open, onClose, onAuthSuccess, hasClerk = tru
                 </div>
               </div>
             ) : hasClerk ? (
-              <div className="clerk-container flex flex-col items-center">
-                {clerkMode === 'signin' ? (
-                  <div className="w-full">
-                    <SignIn
-                      routing="hash"
-                      appearance={{
-                        elements: {
-                          rootBox: 'w-full',
-                          card: 'shadow-none border-0 p-0 bg-transparent w-full',
-                          headerTitle: 'hidden',
-                          headerSubtitle: 'hidden',
-                          socialButtonsBlockButton:
-                            'border border-hairline rounded-lg text-xs font-semibold py-2.5 hover:bg-surface-soft transition-colors text-black',
-                          formButtonPrimary:
-                            'btn-primary rounded-lg text-xs py-2.5 font-semibold transition-all shadow-none',
-                          formFieldInput:
-                            'field-input text-xs py-2',
-                          footerActionLink:
-                            'text-sky-600 hover:text-sky-700 font-semibold text-xs',
-                          dividerRow: 'my-3 text-black/40',
-                          formFieldLabel: 'text-[11px] font-mono uppercase tracking-wider text-black/70 mb-1',
-                        },
-                      }}
-                    />
-                    <div className="mt-4 pt-3 border-t border-hairline text-center text-xs text-black/60">
-                      Need an account?{' '}
-                      <button
-                        onClick={() => setClerkMode('signup')}
-                        className="font-semibold text-black underline underline-offset-2 hover:text-sky-600"
-                      >
-                        Sign up with Clerk
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full">
-                    <SignUp
-                      routing="hash"
-                      appearance={{
-                        elements: {
-                          rootBox: 'w-full',
-                          card: 'shadow-none border-0 p-0 bg-transparent w-full',
-                          headerTitle: 'hidden',
-                          headerSubtitle: 'hidden',
-                          socialButtonsBlockButton:
-                            'border border-hairline rounded-lg text-xs font-semibold py-2.5 hover:bg-surface-soft transition-colors text-black',
-                          formButtonPrimary:
-                            'btn-primary rounded-lg text-xs py-2.5 font-semibold transition-all shadow-none',
-                          formFieldInput:
-                            'field-input text-xs py-2',
-                          footerActionLink:
-                            'text-sky-600 hover:text-sky-700 font-semibold text-xs',
-                          dividerRow: 'my-3 text-black/40',
-                          formFieldLabel: 'text-[11px] font-mono uppercase tracking-wider text-black/70 mb-1',
-                        },
-                      }}
-                    />
-                    <div className="mt-4 pt-3 border-t border-hairline text-center text-xs text-black/60">
-                      Already have an account?{' '}
-                      <button
-                        onClick={() => setClerkMode('signin')}
-                        className="font-semibold text-black underline underline-offset-2 hover:text-sky-600"
-                      >
-                        Sign in with Clerk
-                      </button>
-                    </div>
-                  </div>
-                )}
+              <div className="clerk-container w-full flex justify-center">
+                <SignIn
+                  routing="hash"
+                  appearance={{
+                    elements: {
+                      rootBox: 'w-full',
+                      cardBox: 'w-full shadow-none border-0 p-0 bg-transparent',
+                      card: 'w-full shadow-none border-0 p-0 bg-transparent',
+                      header: 'hidden',
+                      headerTitle: 'hidden',
+                      headerSubtitle: 'hidden',
+                      socialButtonsBlockButton:
+                        'border border-hairline rounded-lg text-xs font-semibold py-2.5 hover:bg-surface-soft transition-colors text-black shadow-none',
+                      formButtonPrimary:
+                        'btn-primary rounded-lg text-xs py-2.5 font-semibold transition-all shadow-none w-full',
+                      formFieldInput:
+                        'field-input text-xs py-2 w-full',
+                      footer:
+                        'bg-transparent border-0 pt-2 p-0',
+                      footerAction:
+                        'text-xs text-black/60',
+                      footerActionLink:
+                        'text-sky-600 hover:text-sky-700 font-semibold text-xs',
+                      dividerRow: 'my-3 text-black/40',
+                      formFieldLabel: 'text-[11px] font-mono uppercase tracking-wider text-black/70 mb-1',
+                    },
+                  }}
+                />
               </div>
             ) : (
               <div className="p-4 rounded-xl border border-hairline bg-surface-soft text-center space-y-2">

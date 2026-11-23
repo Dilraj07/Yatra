@@ -90,3 +90,96 @@
     transform: translateX(0);
   }
 }
+
+/* Scoped Clerk Integration - Seamless Modal Design (No nested card, no shadow collision) */
+.clerk-container .cl-cardBox,
+.clerk-container .cl-card {
+  box-shadow: none !important;
+  border: none !important;
+  background-color: transparent !important;
+  background: transparent !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.clerk-container .cl-rootBox {
+  width: 100% !important;
+}
+
+.clerk-container .cl-header {
+  display: none !important;
+}
+
+.clerk-container .cl-headerTitle,
+.clerk-container .cl-headerSubtitle {
+  display: none !important;
+}
+
+.clerk-container .cl-footer {
+  background: transparent !important;
+  border: none !important;
+  padding-top: 0.75rem !important;
+  padding-bottom: 0 !important;
+  margin: 0 !important;
+}
+
+.clerk-container .cl-socialButtonsBlockButton {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.625rem !important;
+  background-color: #ffffff !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+  padding: 0.625rem 1rem !important;
+  box-shadow: none !important;
+  transition: all 0.15s ease !important;
+}
+
+.clerk-container .cl-socialButtonsBlockButton:hover {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+}
+
+.clerk-container .cl-formButtonPrimary {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 9999px !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  padding: 0.625rem 1.25rem !important;
+  box-shadow: none !important;
+  transition: all 0.15s ease !important;
+}
+
+.clerk-container .cl-formButtonPrimary:hover {
+  background-color: #1e293b !important;
+}
+
+.clerk-container .cl-formFieldInput {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 0.5rem !important;
+  font-size: 0.875rem !important;
+  padding: 0.5rem 0.75rem !important;
+  background-color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.clerk-container .cl-formFieldInput:focus {
+  border-color: #0f172a !important;
+  box-shadow: 0 0 0 1px #0f172a !important;
+}
+
+.clerk-container .cl-dividerLine {
+  background-color: #e5e7eb !important;
+}
+
+.clerk-container .cl-dividerText {
+  color: rgba(0, 0, 0, 0.4) !important;
+  font-family: 'JetBrains Mono', monospace !important;
+  font-size: 0.72rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.05em !important;
+}
+
