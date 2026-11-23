@@ -223,7 +223,7 @@ const MOCK_DATA = {
       user_id: 0,
       sender_name: 'Yatra Copilot',
       is_ai: true,
-      text: '🤖 Intent extracted: 3 travelers, budget ₹25,000/person. Group quorum is met (2/3 YES). Monument passes confirmed for Hampi slot #1.',
+      text: 'Intent extracted: 3 travelers, budget ₹25,000/person. Group quorum is met (2/3 YES). Monument passes confirmed for Hampi slot #1.',
       sent_at: '2026-11-22T10:06:00Z',
     },
   ],

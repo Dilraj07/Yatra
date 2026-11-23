@@ -116,7 +116,7 @@ function launchFallbackModal({
             <div class="text-xs text-slate-400 font-mono">Secured with 256-bit encryption</div>
           </div>
         </div>
-        <button id="rzp-close-btn" class="text-slate-400 hover:text-white text-xl p-1 transition-colors">✕</button>
+        <button id="rzp-close-btn" class="text-slate-400 hover:text-white text-xl p-1 transition-colors leading-none">&times;</button>
       </div>
 
       <!-- Amount Banner -->
@@ -136,21 +136,21 @@ function launchFallbackModal({
         <div class="text-xs font-mono uppercase text-slate-500 tracking-wider">Select Payment Method</div>
 
         <!-- UPI / QR -->
-        <div class="p-3.5 rounded-xl border-2 border-orange-500/40 bg-orange-500/5 flex items-center justify-between cursor-pointer">
+        <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between cursor-pointer">
           <div class="flex items-center gap-3">
-            <span class="text-2xl">📱</span>
+            <span class="text-xs font-mono font-bold bg-slate-200 text-slate-800 px-2 py-1 rounded">UPI</span>
             <div>
               <div class="text-sm font-bold text-slate-900">UPI / QR (Instant)</div>
               <div class="text-xs text-slate-500 font-mono">Google Pay, PhonePe, Paytm, BHIM</div>
             </div>
           </div>
-          <span class="text-xs font-bold text-orange-600 bg-orange-100 px-2 py-1 rounded-md">Default</span>
+          <span class="text-xs font-bold text-slate-700 bg-slate-200 px-2 py-1 rounded-md">Default</span>
         </div>
 
         <!-- Cards -->
         <div class="p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white flex items-center justify-between opacity-80 cursor-pointer">
           <div class="flex items-center gap-3">
-            <span class="text-2xl">💳</span>
+            <span class="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded">CARD</span>
             <div>
               <div class="text-sm font-semibold text-slate-900">Cards (Debit / Credit)</div>
               <div class="text-xs text-slate-400 font-mono">Visa, MasterCard, RuPay</div>
@@ -161,7 +161,7 @@ function launchFallbackModal({
         <!-- Netbanking -->
         <div class="p-3.5 rounded-xl border border-slate-200 hover:border-slate-300 bg-white flex items-center justify-between opacity-80 cursor-pointer">
           <div class="flex items-center gap-3">
-            <span class="text-2xl">🏦</span>
+            <span class="text-xs font-mono font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded">NET</span>
             <div>
               <div class="text-sm font-semibold text-slate-900">Net Banking</div>
               <div class="text-xs text-slate-400 font-mono">All Indian Banks Supported</div>
@@ -170,16 +170,16 @@ function launchFallbackModal({
         </div>
 
         <div class="text-[11px] text-slate-500 bg-slate-100 p-2.5 rounded-lg border border-slate-200 text-center font-mono">
-          🔒 System reservation lock is active while payment is being authorized.
+          System reservation lock is active while payment is being authorized.
         </div>
 
         <!-- Actions for evaluation demo -->
         <div class="pt-2 grid grid-cols-2 gap-3">
           <button id="rzp-pay-success" class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5">
-            <span>✅ Authorize Payment</span>
+            <span>Authorize Payment</span>
           </button>
           <button id="rzp-pay-fail" class="w-full py-3 px-4 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-700 border border-rose-200 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-1">
-            <span>❌ Simulate Card Decline</span>
+            <span>Simulate Card Decline</span>
           </button>
         </div>
       </div>

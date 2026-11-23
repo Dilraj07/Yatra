@@ -161,7 +161,7 @@ export default function TripChatHub({
             user_id: 0,
             sender_name: 'Yatra System',
             is_ai: true,
-            text: `🎉 **Payment Captured via Razorpay Gateway!**\n• Payment ID: \`${paymentDetails.payment_id}\`\n• Order ID: \`${paymentDetails.order_id}\`\n• Amount: ₹${payAmount.toLocaleString()}\n• Status: \`CONFIRMED\`\n• Group split settled. All member bookings confirmed!`,
+            text: `**Payment Captured via Razorpay Gateway**\n• Payment ID: \`${paymentDetails.payment_id}\`\n• Order ID: \`${paymentDetails.order_id}\`\n• Amount: ₹${payAmount.toLocaleString()}\n• Status: \`CONFIRMED\`\n• Group split settled. All member bookings confirmed!`,
             sent_at: new Date().toISOString(),
           },
         ]);
