@@ -748,3 +748,4 @@ if __name__ == "__main__":
     import shutil
     shutil.copyfile(out_pdf1, out_pdf2)
     print(f"Copied report to: {out_pdf2}")
+

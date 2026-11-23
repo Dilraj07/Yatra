@@ -19,19 +19,22 @@ def _log_snapshot(
     response_payload: dict[str, Any],
     mode: str,
 ) -> str:
-    db = get_mongo_db()
-    doc = {
-        "trip_id": trip_id,
-        "saga_id": saga_id,
-        "provider": provider,
-        "action": action,
-        "mode": mode,
-        "request": request_payload,
-        "response": response_payload,
-        "captured_at": datetime.now(timezone.utc).isoformat(),
-    }
-    res = db["supplier_snapshots"].insert_one(doc)
-    return str(res.inserted_id)
+    try:
+        db = get_mongo_db()
+        doc = {
+            "trip_id": trip_id,
+            "saga_id": saga_id,
+            "provider": provider,
+            "action": action,
+            "mode": mode,
+            "request": request_payload,
+            "response": response_payload,
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+        }
+        res = db["supplier_snapshots"].insert_one(doc)
+        return str(res.inserted_id)
+    except Exception:
+        return f"snap_{uuid.uuid4().hex[:12]}"
 
 
 def book_flight_duffel(

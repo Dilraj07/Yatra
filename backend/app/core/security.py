@@ -47,6 +47,7 @@ def create_access_token(user_id: int, email: str, full_name: str) -> str:
                 "sub": user_id,
                 "email": email,
                 "full_name": full_name,
+                "name": full_name,
                 "exp": int(time.time()) + settings.jwt_exp_hours * 3600,
             }
         ).encode("utf-8")
