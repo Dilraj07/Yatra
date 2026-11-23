@@ -170,7 +170,7 @@ function launchFallbackModal({
         </div>
 
         <div class="text-[11px] text-slate-500 bg-slate-100 p-2.5 rounded-lg border border-slate-200 text-center font-mono">
-          🔒 PostgreSQL row lock <span class="font-bold text-slate-700">SELECT ... FOR UPDATE</span> is active while payment is being authorized.
+          🔒 System reservation lock is active while payment is being authorized.
         </div>
 
         <!-- Actions for evaluation demo -->

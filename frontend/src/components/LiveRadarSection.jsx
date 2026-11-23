@@ -113,7 +113,7 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
           <span className="eyebrow-mono text-black/60">REAL-TIME AIRSPACE & STAYS</span>
           <h2 className="display-lg mt-1 text-black">Live Flights & Hotels Radar</h2>
           <p className="text-xs text-neutral-500 max-w-2xl mt-1">
-            Live ADS-B aircraft positions from OpenSky Network, verified hotels from OpenStreetMap, and satellite ground conditions from Open-Meteo.
+            Real-time commercial flights, local stays, and satellite ground conditions for your destination.
           </p>
         </div>
 
@@ -211,7 +211,7 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
           <div className="flex items-center justify-between pb-3 border-b border-hairline">
             <div className="flex items-center gap-2">
               <Plane className="w-4 h-4 text-blue-600" />
-              <span className="caption-mono font-bold">AIRSPACE RADAR · OPENSKY NETWORK</span>
+              <span className="caption-mono font-bold">AIRSPACE RADAR · LIVE FLIGHT TELEMETRY</span>
             </div>
             <span className="text-xs font-mono text-muted bg-surface-soft px-2.5 py-0.5 rounded-pill border border-hairline">
               {flightsData?.flights?.length || 0} Aircraft on Screen
@@ -254,7 +254,7 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
                   </div>
                   <div>
                     <span className="text-[10px] block text-neutral-400">SOURCE</span>
-                    <span className="text-emerald-700 font-bold">Live OpenSky</span>
+                    <span className="text-emerald-700 font-bold">Live Flight Feed</span>
                   </div>
                 </div>
               </div>

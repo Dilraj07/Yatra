@@ -35,7 +35,7 @@ const WORKSPACE_TABS = [
   { id: 'voting', label: 'Group Approvals', icon: Vote },
   { id: 'saga', label: 'Booking Engine', icon: ShieldCheck },
   { id: 'tickets', label: 'Heritage Tickets', icon: Ticket },
-  { id: 'audit', label: 'Database Logs', icon: Database },
+  { id: 'audit', label: 'Activity Logs', icon: Database },
   { id: 'trips', label: 'All Trips', icon: Compass },
 ];
 

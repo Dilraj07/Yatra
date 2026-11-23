@@ -38,7 +38,7 @@ export default function SagaSection({ activeTripId, itineraries = [], sagas = []
       if (onRefresh) onRefresh(activeTripId);
     } catch (err) {
       if (paymentDetails) {
-        notify('success', `Payment captured (${paymentDetails.payment_id}). PostgreSQL Saga transaction recorded.`);
+        notify('success', `Payment captured (${paymentDetails.payment_id}). Booking transaction recorded.`);
       } else {
         notify('error', err.message, err.pgDetail);
       }
@@ -79,8 +79,8 @@ export default function SagaSection({ activeTripId, itineraries = [], sagas = []
 
   const defaultPipelineSteps = [
     { seq: 1, type: 'HOLD_SLOT', label: 'Hold Monument Inventory', provider: 'Archaeological Survey of India', icon: Ticket },
-    { seq: 2, type: 'BOOK_FLIGHT', label: 'Reserve Air Seats', provider: 'Air India / OpenSky Telemetry', icon: Plane },
-    { seq: 3, type: 'BOOK_HOTEL', label: 'Reserve Resort Stays', provider: 'Palolem Beach Resort / OSM', icon: Building },
+    { seq: 2, type: 'BOOK_FLIGHT', label: 'Reserve Air Seats', provider: 'Air India / Commercial Flights', icon: Plane },
+    { seq: 3, type: 'BOOK_HOTEL', label: 'Reserve Resort Stays', provider: 'Palolem Beach Resort', icon: Building },
     { seq: 4, type: 'COLLECT_PAYMENT', label: 'Collect Group Split', provider: 'Razorpay Payment Gateway', icon: CreditCard },
   ];
 
@@ -121,14 +121,14 @@ export default function SagaSection({ activeTripId, itineraries = [], sagas = []
           <label className="caption-mono block mb-1">EXECUTION MODE</label>
           <select className="field-input" value={failurePoint} onChange={(e) => setFailurePoint(e.target.value)}>
             <option value="">Normal (Confirm All)</option>
-            <option value="FLIGHT">Fail at Duffel Flight (Test Rollback)</option>
-            <option value="HOTEL">Fail at LiteAPI Hotel (Test Rollback)</option>
-            <option value="PAYMENT">Fail at Razorpay Payment (Full Compensation)</option>
+            <option value="FLIGHT">Simulate Flight Booking Issue (Test Rollback)</option>
+            <option value="HOTEL">Simulate Hotel Sold-out (Test Rollback)</option>
+            <option value="PAYMENT">Simulate Payment Failure (Full Refund Rollback)</option>
           </select>
         </div>
         <button type="submit" disabled={running} className="btn-primary w-full">
           {failurePoint ? <RotateCcw className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-          {running ? 'Running...' : 'Execute Saga'}
+          {running ? 'Processing...' : 'Confirm Group Booking'}
         </button>
       </form>
 
@@ -136,7 +136,7 @@ export default function SagaSection({ activeTripId, itineraries = [], sagas = []
         {sagas.map((s) => (
           <div key={s.saga_id} className="rounded-lg bg-white/10 border border-white/20 p-5 space-y-3">
             <div className="flex justify-between items-center">
-              <span className="caption-mono text-white">SAGA #{s.saga_id} · ITINERARY v{s.itinerary_version}</span>
+              <span className="caption-mono text-white">BOOKING #{s.saga_id} · ITINERARY v{s.itinerary_version}</span>
               <span className="caption-mono px-3 py-1 rounded-pill bg-white text-ink">{s.state}</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

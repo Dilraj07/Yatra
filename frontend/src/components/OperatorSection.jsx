@@ -32,21 +32,21 @@ export default function OperatorSection({ pois, slots, holds, onRefresh, notify 
           });
           notify(
             'success',
-            `Payment ₹${totalAmount.toLocaleString()} CAPTURED (${paymentDetails.payment_id}). PostgreSQL atomic commit: ${seats} seats booked.`
+            `Payment ₹${totalAmount.toLocaleString()} confirmed (${paymentDetails.payment_id}). Successfully booked ${seats} seats!`
           );
           if (onRefresh) onRefresh();
         } catch (err) {
           // If backend isn't up, still confirm the client-side state
           notify(
             'success',
-            `Payment ₹${totalAmount.toLocaleString()} verified (${paymentDetails.payment_id})! Transaction logged to PostgreSQL ledger.`
+            `Payment ₹${totalAmount.toLocaleString()} verified (${paymentDetails.payment_id})! Reservation recorded.`
           );
         }
       },
       onFailure: (err) => {
         notify(
           'error',
-          `Razorpay payment declined (${err.description || 'Simulated failure'}). Saga compensation: inventory hold released.`
+          `Razorpay payment declined (${err.description || 'Simulated failure'}). Inventory hold released.`
         );
       },
     });
@@ -150,7 +150,7 @@ export default function OperatorSection({ pois, slots, holds, onRefresh, notify 
                     Payment ID: {lastPayment.payment_id} · Amount: ₹{Number(lastPayment.amount_inr).toLocaleString()}
                   </div>
                   <div className="text-[11px] text-emerald-400/80 mt-0.5">
-                    PostgreSQL Status: CAPTURED | Row Lock Committed | Ledger Σ = 0
+                    Status: CONFIRMED | Reservation Secured | All Passes Validated
                   </div>
                 </div>
               </div>

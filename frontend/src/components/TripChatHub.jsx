@@ -153,7 +153,7 @@ export default function TripChatHub({
       customerName: currentUser?.full_name || 'Arya Wadhwa',
       customerEmail: currentUser?.email || 'arya@yatra.local',
       onSuccess: (paymentDetails) => {
-        notify('success', `Payment ₹${payAmount.toLocaleString()} CAPTURED (${paymentDetails.payment_id}). PostgreSQL atomic commit complete!`);
+        notify('success', `Payment ₹${payAmount.toLocaleString()} confirmed (${paymentDetails.payment_id}). Booking complete!`);
         setMessages((prev) => [
           ...prev,
           {
@@ -161,14 +161,14 @@ export default function TripChatHub({
             user_id: 0,
             sender_name: 'Yatra System',
             is_ai: true,
-            text: `🎉 **Payment Captured via Razorpay Gateway!**\n• Payment ID: \`${paymentDetails.payment_id}\`\n• Order ID: \`${paymentDetails.order_id}\`\n• Amount: ₹${payAmount.toLocaleString()}\n• PostgreSQL Status: \`CONFIRMED\`\n• Ledger debit and credit balanced to zero ($\\\\sum = 0$). All members confirmed!`,
+            text: `🎉 **Payment Captured via Razorpay Gateway!**\n• Payment ID: \`${paymentDetails.payment_id}\`\n• Order ID: \`${paymentDetails.order_id}\`\n• Amount: ₹${payAmount.toLocaleString()}\n• Status: \`CONFIRMED\`\n• Group split settled. All member bookings confirmed!`,
             sent_at: new Date().toISOString(),
           },
         ]);
         if (onRefresh) onRefresh(activeTripId);
       },
       onFailure: (err) => {
-        notify('error', `Razorpay payment declined (${err.description || 'Test failure'}). Saga compensation rollback executed.`);
+        notify('error', `Razorpay payment declined (${err.description || 'Decline'}). Reservation hold released.`);
       },
     });
   };
@@ -188,11 +188,11 @@ export default function TripChatHub({
             body: JSON.stringify({ slot_id: slot.slot_id, seats: 1 }),
           });
         } catch (_) {}
-        notify('success', `Ticket booked for ₹${amount.toLocaleString()} (${paymentDetails.payment_id}). Row-level lock committed.`);
+        notify('success', `Ticket booked for ₹${amount.toLocaleString()} (${paymentDetails.payment_id}). Reservation confirmed!`);
         if (onRefresh) onRefresh();
       },
       onFailure: (err) => {
-        notify('error', `Payment declined (${err.description || 'Decline'}). Lock released.`);
+        notify('error', `Payment declined (${err.description || 'Decline'}). Reservation released.`);
       },
     });
   };

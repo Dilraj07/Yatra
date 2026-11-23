@@ -134,7 +134,7 @@ export default function PlannerSection({ activeTripId, tripDetail, itineraries, 
 
         <div className="editorial-card space-y-3 h-fit">
           <span className="caption-mono">QUICK ACTIVITY SCHEDULER</span>
-          <p className="text-xs">Adds a leg to the latest itinerary. Overlapping times are blocked by PostgreSQL.</p>
+          <p className="text-xs">Adds an activity to the current plan. Overlapping time slots are automatically prevented.</p>
           <form onSubmit={handleQuickLeg} className="space-y-2.5">
             <input className="field-input" value={legTitle} onChange={(e) => setLegTitle(e.target.value)} required />
             <input className="field-input" type="datetime-local" value={spanStart} onChange={(e) => setSpanStart(e.target.value)} required />

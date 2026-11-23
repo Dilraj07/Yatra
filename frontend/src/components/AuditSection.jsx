@@ -36,9 +36,9 @@ export default function AuditSection({ auditRows = [], nosqlDocs = {} }) {
       <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <span className="eyebrow-mono text-black/60">SYSTEM OBSERVABILITY</span>
-          <h2 className="display-lg mt-1 text-black">Audit Trails & NoSQL Snapshots</h2>
+          <h2 className="display-lg mt-1 text-black">System Activity & Event Logs</h2>
           <p className="text-xs text-neutral-500 max-w-2xl mt-1">
-            Real-time audit trails partitioned by monthly range tables with automated database triggers capturing every relational mutation and JSON before/after state.
+            Real-time audit log tracking system events, booking state transitions, and partner integrations.
           </p>
         </div>
       </div>
@@ -48,39 +48,39 @@ export default function AuditSection({ auditRows = [], nosqlDocs = {} }) {
         <div className="bg-white border border-hairline rounded-2xl p-4 shadow-xs">
           <div className="flex items-center gap-2 text-neutral-400 text-xs font-medium">
             <Database className="w-3.5 h-3.5 text-blue-600" />
-            <span>POSTGRESQL AUDIT PARTITIONS</span>
+            <span>TRANSACTION AUDIT LOGS</span>
           </div>
           <div className="text-xl font-bold font-mono text-slate-900 mt-1">
-            audit_log_2026_11 / 12
+            Active Event Log
           </div>
           <p className="text-[11px] text-neutral-500 mt-0.5">
-            Range partitioned on <code>changed_at</code> timestamp
+            Partitioned event stream by timestamp
           </p>
         </div>
 
         <div className="bg-white border border-hairline rounded-2xl p-4 shadow-xs">
           <div className="flex items-center gap-2 text-neutral-400 text-xs font-medium">
             <Activity className="w-3.5 h-3.5 text-emerald-600" />
-            <span>RECORDED MUTATIONS</span>
+            <span>RECORDED EVENTS</span>
           </div>
           <div className="text-xl font-bold font-mono text-slate-900 mt-1">
-            {auditRows.length} Logged Transactions
+            {auditRows.length} Logged Events
           </div>
           <p className="text-[11px] text-neutral-500 mt-0.5">
-            Row-level trigger capturing before/after JSON images
+            Automated before/after state captures
           </p>
         </div>
 
         <div className="bg-white border border-hairline rounded-2xl p-4 shadow-xs">
           <div className="flex items-center gap-2 text-neutral-400 text-xs font-medium">
             <FileJson className="w-3.5 h-3.5 text-purple-600" />
-            <span>NOSQL DOCUMENT CACHE</span>
+            <span>PARTNER INTEGRATION LOGS</span>
           </div>
           <div className="text-xl font-bold font-mono text-slate-900 mt-1">
             {nosqlDocs?.supplier_snapshots?.length || 0} External Snapshots
           </div>
           <p className="text-[11px] text-neutral-500 mt-0.5">
-            MongoDB cache for OpenSky & supplier payloads
+            Partner booking & external event logs
           </p>
         </div>
       </div>
@@ -96,7 +96,7 @@ export default function AuditSection({ auditRows = [], nosqlDocs = {} }) {
                 : 'text-neutral-500 hover:text-slate-900'
             }`}
           >
-            <Database className="w-3.5 h-3.5 text-blue-600" /> PostgreSQL Audit ({auditRows.length})
+            <Database className="w-3.5 h-3.5 text-blue-600" /> Transaction Audit ({auditRows.length})
           </button>
           <button
             onClick={() => setSubTab('snapshots')}
@@ -106,7 +106,7 @@ export default function AuditSection({ auditRows = [], nosqlDocs = {} }) {
                 : 'text-neutral-500 hover:text-slate-900'
             }`}
           >
-            <FileJson className="w-3.5 h-3.5 text-purple-600" /> Supplier Snapshots ({nosqlDocs?.supplier_snapshots?.length || 0})
+            <FileJson className="w-3.5 h-3.5 text-purple-600" /> Partner API Logs ({nosqlDocs?.supplier_snapshots?.length || 0})
           </button>
           <button
             onClick={() => setSubTab('llm')}
@@ -116,7 +116,7 @@ export default function AuditSection({ auditRows = [], nosqlDocs = {} }) {
                 : 'text-neutral-500 hover:text-slate-900'
             }`}
           >
-            <Bot className="w-3.5 h-3.5 text-emerald-600" /> LLM Copilot Memory ({nosqlDocs?.llm_conversations?.length || 0})
+            <Bot className="w-3.5 h-3.5 text-emerald-600" /> AI Assistant Activity ({nosqlDocs?.llm_conversations?.length || 0})
           </button>
         </div>
 
@@ -191,7 +191,7 @@ export default function AuditSection({ auditRows = [], nosqlDocs = {} }) {
         {subTab === 'snapshots' && (
           <div className="space-y-4">
             <div className="text-xs text-neutral-500">
-              Raw cached JSON payloads from external suppliers (Razorpay, Duffel Flights, LiteAPI Stays) recorded by the 2PC Saga.
+              Event logs from external travel partners (payments, airlines, hotels) captured during bookings.
             </div>
             <div className="space-y-3 font-mono text-xs">
               {(nosqlDocs?.supplier_snapshots || []).map((d) => (
@@ -218,7 +218,7 @@ export default function AuditSection({ auditRows = [], nosqlDocs = {} }) {
         {subTab === 'llm' && (
           <div className="space-y-4">
             <div className="text-xs text-neutral-500">
-              Captured conversation memory, structured intent extraction, and GiST constraint checks generated by Yatra Copilot.
+              Captured conversation context, extracted trip intents, and itinerary planning steps.
             </div>
             <div className="space-y-3 font-mono text-xs">
               {(nosqlDocs?.llm_conversations || []).map((d) => (

@@ -172,7 +172,7 @@ export default function TripsSection({
             {activeTripObj?.quorum_pct || 60}% Majority
           </div>
           <p className="text-[11px] text-neutral-500 mt-0.5">
-            PostgreSQL deferred trigger enforcement
+            Consensus policy enforced at booking confirmation
           </p>
         </div>
       </div>
@@ -342,7 +342,7 @@ export default function TripsSection({
                   Registered Travelers ({currentMembers.length})
                 </span>
                 <span className="text-xs text-neutral-400">
-                  PostgreSQL Table: <code className="font-mono text-slate-700">trip_member</code>
+                  Group Travelers List
                 </span>
               </div>
 
@@ -497,7 +497,7 @@ export default function TripsSection({
           <div className="pb-3 border-b border-hairline">
             <h3 className="text-lg font-bold text-slate-900">Create New Group Tourism Trip</h3>
             <p className="text-xs text-neutral-500 mt-0.5">
-              Initializes a new trip instance in PostgreSQL with travel date ranges and default quorum threshold.
+              Initializes a new group trip with travel date ranges and default quorum threshold.
             </p>
           </div>
 
