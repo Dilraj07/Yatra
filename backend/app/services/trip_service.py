@@ -36,6 +36,18 @@ def add_member(trip_id: int, payload: MemberAdd) -> dict[str, Any]:
     )
 
 
+def remove_member(trip_id: int, user_id: int) -> dict[str, Any]:
+    detail = trip_repo.get_trip_detail(trip_id)
+    if not detail:
+        raise NotFoundError(f"Trip {trip_id} not found")
+    trip_row = detail.get("trip", {})
+    if trip_row.get("organizer_id") == user_id:
+        raise DomainError("Cannot remove the trip organizer from the trip.")
+    trip_repo.remove_member(trip_id, user_id)
+    return {"status": "success", "message": f"Member {user_id} removed from trip {trip_id}"}
+
+
+
 def add_constraint(trip_id: int, payload: ConstraintAdd) -> dict[str, Any]:
     return trip_repo.add_constraint(
         trip_id=trip_id,

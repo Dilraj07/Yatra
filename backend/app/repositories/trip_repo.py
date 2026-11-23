@@ -93,6 +93,22 @@ def add_member(trip_id: int, user_id: int, role: str, budget_ceiling: float, joi
             return row
 
 
+def remove_member(trip_id: int, user_id: int) -> bool:
+    with get_pg_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM trip_member WHERE trip_id = %s AND user_id = %s",
+                (trip_id, user_id),
+            )
+            cur.execute(
+                "DELETE FROM member_constraint WHERE trip_id = %s AND user_id = %s",
+                (trip_id, user_id),
+            )
+            conn.commit()
+            return True
+
+
+
 def add_constraint(trip_id: int, user_id: int, kind: str, value: dict[str, Any], is_hard: bool) -> dict[str, Any]:
     with get_pg_conn() as conn:
         with conn.cursor() as cur:

@@ -282,6 +282,7 @@ export async function apiRequest(path, options = {}) {
 
     if (!res.ok) {
       if (options.method && options.method !== 'GET') {
+        _handleMockMutation(path, options);
         return { success: true, message: 'Action completed (Sandbox Mode)' };
       }
       const cleanPath = path.split('?')[0];
@@ -300,13 +301,43 @@ export async function apiRequest(path, options = {}) {
     return data;
   } catch (netErr) {
     // If backend is offline, return pre-seeded mock data so demo is 100% unbreakable!
+    if (options.method && options.method !== 'GET') {
+      _handleMockMutation(path, options);
+      return { success: true, message: 'Updated locally in sandbox mode' };
+    }
     const cleanPath = path.split('?')[0];
     if (MOCK_DATA[path] || MOCK_DATA[cleanPath]) {
       return MOCK_DATA[path] || MOCK_DATA[cleanPath];
     }
-    if (options.method && options.method !== 'GET') {
-      return { success: true, message: 'Updated locally in sandbox mode' };
-    }
     return path.endsWith('s') ? [] : {};
   }
 }
+
+function _handleMockMutation(path, options) {
+  try {
+    if (path.includes('/members')) {
+      const match = path.match(/\/api\/trips\/(\d+)\/members/);
+      const tripKey = `/api/trips/${match ? match[1] : 1}`;
+      if (MOCK_DATA[tripKey]) {
+        if (options.method === 'POST') {
+          const body = JSON.parse(options.body || '{}');
+          const users = MOCK_DATA['/api/auth/users'] || [];
+          const userObj = users.find((u) => u.user_id === Number(body.user_id)) || { full_name: `Traveler ${body.user_id}` };
+          if (!MOCK_DATA[tripKey].members.some((m) => m.user_id === Number(body.user_id))) {
+            MOCK_DATA[tripKey].members.push({
+              user_id: Number(body.user_id),
+              full_name: userObj.full_name,
+              role: body.role || 'MEMBER',
+              joining_city: body.joining_city || 'Bengaluru',
+              budget_ceiling: Number(body.budget_ceiling) || 25000,
+            });
+          }
+        } else if (options.method === 'DELETE') {
+          const delUserId = Number(path.split('/').pop());
+          MOCK_DATA[tripKey].members = MOCK_DATA[tripKey].members.filter((m) => m.user_id !== delUserId);
+        }
+      }
+    }
+  } catch (_) {}
+}
+

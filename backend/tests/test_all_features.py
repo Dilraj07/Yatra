@@ -302,3 +302,75 @@ def test_feature10_openapi_docs(client):
     assert "/api/radar/weather" in schema["paths"]
     assert "/api/saga/execute" in schema["paths"]
     assert "/api/voting/proposals" in schema["paths"]
+
+
+# =============================================================================
+# FEATURE 11: Trip Discussion Agent Monitoring & Member Management
+# =============================================================================
+def test_feature11_chat_agent_monitoring():
+    from app.routers.chat import _generate_agent_monitoring_response
+
+    # Question on budget
+    reply1 = _generate_agent_monitoring_response(1, "What is our budget ceiling per person?", "Arya Wadhwa")
+    assert reply1 is not None
+    assert "Yatra Copilot Active Monitor" in reply1
+    assert "budget" in reply1.lower()
+
+    # Question on tickets
+    reply2 = _generate_agent_monitoring_response(1, "Can we check ASI monument tickets for Hampi?", "Dilraj Singh")
+    assert reply2 is not None
+    assert "Yatra Copilot Active Monitor" in reply2
+    assert "heritage" in reply2.lower() or "ticket" in reply2.lower()
+
+    # Summoning agent
+    reply3 = _generate_agent_monitoring_response(1, "@copilot suggest the best dates", "Aarush Luthra")
+    assert reply3 is not None
+    assert "Aarush Luthra" in reply3
+
+
+def test_feature11_trip_member_management(monkeypatch):
+    from app.services import trip_service
+    from app.schemas.trip import MemberAdd
+    from app.repositories import trip_repo
+
+    mock_members = [
+        {"user_id": 1, "role": "ORGANIZER", "joining_city": "Bengaluru", "budget_ceiling": 25000.0},
+        {"user_id": 2, "role": "MEMBER", "joining_city": "Delhi", "budget_ceiling": 25000.0},
+    ]
+
+    def mock_get_trip_detail(trip_id):
+        return {
+            "trip": {"trip_id": 1, "organizer_id": 1, "title": "Goa Trip"},
+            "members": mock_members,
+        }
+
+    def mock_add_member(trip_id, user_id, role, budget_ceiling, joining_city):
+        new_m = {"user_id": user_id, "role": role, "joining_city": joining_city, "budget_ceiling": budget_ceiling}
+        mock_members.append(new_m)
+        return new_m
+
+    def mock_remove_member(trip_id, user_id):
+        nonlocal mock_members
+        mock_members = [m for m in mock_members if m["user_id"] != user_id]
+        return True
+
+    monkeypatch.setattr(trip_repo, "get_trip_detail", mock_get_trip_detail)
+    monkeypatch.setattr(trip_repo, "add_member", mock_add_member)
+    monkeypatch.setattr(trip_repo, "remove_member", mock_remove_member)
+
+    # 1. Add new member (user 4)
+    payload = MemberAdd(user_id=4, role="MEMBER", budget_ceiling=30000.0, joining_city="Mumbai")
+    added = trip_service.add_member(1, payload)
+    assert added["user_id"] == 4
+    assert len(mock_members) == 3
+
+    # 2. Remove member (user 2)
+    res = trip_service.remove_member(1, 2)
+    assert res["status"] == "success"
+    assert len(mock_members) == 2
+
+    # 3. Disallow deleting the organizer (user 1)
+    with pytest.raises(Exception) as excinfo:
+        trip_service.remove_member(1, 1)
+    assert "organizer" in str(excinfo.value).lower()
+

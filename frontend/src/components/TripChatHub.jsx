@@ -4,6 +4,8 @@ import {
   Sparkles,
   Send,
   Users,
+  UserPlus,
+  Trash2,
   MapPin,
   Calendar,
   Ticket,
@@ -20,6 +22,7 @@ import {
   Check,
   X,
   CreditCard,
+  Radio,
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { openRazorpayCheckout } from '../api/payment';
@@ -30,6 +33,7 @@ export default function TripChatHub({
   setActiveTripId,
   trips,
   tripDetail,
+  allUsers,
   itineraries,
   proposals,
   slots,
@@ -45,6 +49,14 @@ export default function TripChatHub({
   const [analyzing, setAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState('plan'); // 'plan' | 'tickets' | 'budget'
   const chatScrollRef = useRef(null);
+
+  // Member management states
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState('MEMBER');
+  const [newMemberCity, setNewMemberCity] = useState('Bengaluru');
+  const [newMemberBudget, setNewMemberBudget] = useState(25000);
+  const [memberActionLoading, setMemberActionLoading] = useState(false);
 
   // Load chat messages when trip changes
   const loadMessages = async () => {
@@ -73,10 +85,11 @@ export default function TripChatHub({
     }
   }, [messages]);
 
-  // Send human message
-  const handleSendMessage = async (e) => {
+  // Send human message and receive active agent monitoring response
+  const handleSendMessage = async (e, textOverride = null) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || !activeTripId) return;
+    const textToSend = (textOverride || inputText).trim();
+    if (!textToSend || !activeTripId) return;
 
     if (!currentUser) {
       notify('error', 'Please sign in to send messages in the trip chat.');
@@ -85,21 +98,100 @@ export default function TripChatHub({
     }
 
     setSending(true);
+    setInputText('');
     try {
       const newMsg = await apiRequest(`/api/chat/trip/${activeTripId}/messages`, {
         method: 'POST',
         body: JSON.stringify({
-          text: inputText.trim(),
+          text: textToSend,
           sender_name: currentUser.full_name,
           sender_id: currentUser.user_id,
         }),
       });
-      setMessages((prev) => [...prev, newMsg]);
-      setInputText('');
+
+      if (newMsg?.agent_message) {
+        setMessages((prev) => [...prev, newMsg, newMsg.agent_message]);
+      } else if (newMsg) {
+        setMessages((prev) => [...prev, newMsg]);
+      }
     } catch (err) {
       notify('error', `Failed to send: ${err.message}`);
     } finally {
       setSending(false);
+    }
+  };
+
+  // Add Member to Trip
+  const handleAddMember = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedUserId || !activeTripId) return;
+
+    setMemberActionLoading(true);
+    try {
+      const selectedUser = (allUsers || []).find((u) => String(u.user_id) === String(selectedUserId));
+      await apiRequest(`/api/trips/${activeTripId}/members`, {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: Number(selectedUserId),
+          role: newMemberRole,
+          joining_city: newMemberCity,
+          budget_ceiling: Number(newMemberBudget) || 25000,
+        }),
+      });
+
+      // Announce member addition in chat
+      const announceText = `Traveler Added: ${selectedUser?.full_name || 'New Member'} (${newMemberCity}) joined the trip. Quorum recalculated for ${memberCount + 1} travelers.`;
+      try {
+        await apiRequest(`/api/chat/trip/${activeTripId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({
+            text: announceText,
+            sender_name: 'Yatra System',
+            sender_id: 0,
+          }),
+        });
+      } catch (_) {}
+
+      notify('success', `Added ${selectedUser?.full_name || 'traveler'} to the trip.`);
+      setAddMemberOpen(false);
+      setSelectedUserId('');
+      if (onRefresh) onRefresh(activeTripId);
+      loadMessages();
+    } catch (err) {
+      notify('error', `Failed to add member: ${err.message}`);
+    } finally {
+      setMemberActionLoading(false);
+    }
+  };
+
+  // Remove Member from Trip
+  const handleRemoveMember = async (userId, memberName) => {
+    if (!activeTripId) return;
+    if (!confirm(`Are you sure you want to remove ${memberName} from this trip?`)) return;
+
+    try {
+      await apiRequest(`/api/trips/${activeTripId}/members/${userId}`, {
+        method: 'DELETE',
+      });
+
+      // Announce member removal in chat
+      const announceText = `Traveler Removed: ${memberName} was removed from the trip. Quorum recalculated for ${Math.max(1, memberCount - 1)} travelers.`;
+      try {
+        await apiRequest(`/api/chat/trip/${activeTripId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({
+            text: announceText,
+            sender_name: 'Yatra System',
+            sender_id: 0,
+          }),
+        });
+      } catch (_) {}
+
+      notify('success', `Removed ${memberName} from the trip.`);
+      if (onRefresh) onRefresh(activeTripId);
+      loadMessages();
+    } catch (err) {
+      notify('error', `Failed to remove member: ${err.message}`);
     }
   };
 
@@ -124,6 +216,7 @@ export default function TripChatHub({
       setAnalyzing(false);
     }
   };
+
 
   // Vote on active proposal
   const handleVote = async (proposalId, choice) => {
@@ -246,19 +339,55 @@ export default function TripChatHub({
           </div>
         </div>
 
-        {/* Informational Member Badges */}
-        <div className="flex flex-wrap items-center gap-2 pt-4 mt-4 border-t border-hairline">
-          <span className="text-xs font-medium text-black/50 mr-1">Travelers in this trip:</span>
-          {(tripDetail?.members || []).map((m) => (
-            <div
-              key={m.user_id}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs bg-surface-soft text-black border border-hairline font-medium"
-            >
-              <span className="w-2 h-2 rounded-full bg-semantic-success"></span>
-              <span>{m.full_name}</span>
-              <span className="text-[10px] text-black/50 capitalize">({m.role?.toLowerCase()})</span>
+        {/* Interactive Member Roster & Management */}
+        <div className="pt-4 mt-4 border-t border-hairline space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="caption-mono text-black/60">
+                TRAVELERS & QUORUM PARTICIPANTS ({tripDetail?.members?.length || memberCount})
+              </span>
+              <span className="text-xs text-black/30">·</span>
+              <span className="text-xs text-black/60">
+                Quorum: {Math.ceil(((tripDetail?.members?.length || memberCount) * quorumRequiredPct) / 100)} of {tripDetail?.members?.length || memberCount} required ({quorumRequiredPct}%)
+              </span>
             </div>
-          ))}
+            <button
+              onClick={() => setAddMemberOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-semibold bg-sky-50 text-sky-900 hover:bg-sky-100 border border-sky-300 transition-colors shadow-2xs self-start sm:self-auto cursor-pointer"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-sky-700" />
+              <span>Add Traveler</span>
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {(tripDetail?.members || []).map((m) => (
+              <div
+                key={m.user_id}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-pill text-xs bg-surface-soft text-black border border-hairline font-medium hover:border-black/30 transition-all group"
+              >
+                <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold">
+                  {m.full_name?.charAt(0) || 'U'}
+                </div>
+                <span>{m.full_name}</span>
+                <span className="text-[10px] text-black/50 font-mono">
+                  {m.joining_city ? `${m.joining_city} · ` : ''}₹{Number(m.budget_ceiling || 25000).toLocaleString()}
+                </span>
+                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded-xs bg-white text-black/70 border border-hairline">
+                  {m.role?.toLowerCase()}
+                </span>
+                {m.role !== 'ORGANIZER' && (
+                  <button
+                    onClick={() => handleRemoveMember(m.user_id, m.full_name)}
+                    title={`Remove ${m.full_name} from trip`}
+                    className="w-4 h-4 rounded-full hover:bg-rose-100 hover:text-rose-700 text-black/30 flex items-center justify-center transition-colors ml-0.5 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -266,27 +395,37 @@ export default function TripChatHub({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Group Discussion Chat with AI Copilot (Editorial Frame) */}
         <div className="lg:col-span-7 bg-white border border-hairline rounded-2xl flex flex-col shadow-xs h-[740px] overflow-hidden">
-          {/* Chat Header (Without "Live" text) */}
-          <div className="p-4 border-b border-hairline bg-surface-soft/80 flex items-center justify-between">
+          {/* Chat Header with Active Agent Monitor Indicator */}
+          <div className="p-4 border-b border-hairline bg-surface-soft/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-block-lilac/60 border border-block-lilac text-black flex items-center justify-center font-bold">
+              <div className="w-10 h-10 rounded-full bg-block-lilac/60 border border-block-lilac text-black flex items-center justify-center font-bold shrink-0">
                 <MessageSquare className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-sm font-bold text-black">Trip Group Chat</h2>
-                <p className="text-xs text-black/60">Collaborate with Aarush, Arya, Dilraj, and Yatra Copilot</p>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-black">Trip Group Chat</h2>
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-pill bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-mono font-medium">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-600"></span>
+                    </span>
+                    <span>AGENT MONITOR ACTIVE</span>
+                  </div>
+                </div>
+                <p className="text-xs text-black/60">Collaborate with travelers · Copilot monitors discussion</p>
               </div>
             </div>
 
             <button
               onClick={handleAnalyzeChat}
               disabled={analyzing}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-pill text-xs font-semibold bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300/80 active:scale-95 transition-all shadow-xs disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-pill text-xs font-semibold bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300/80 active:scale-95 transition-all shadow-xs disabled:opacity-40 self-start sm:self-auto cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              {analyzing ? 'Analyzing...' : 'Synthesize Plan'}
+              <span>{analyzing ? 'Synthesizing...' : 'Synthesize Consensus'}</span>
             </button>
           </div>
+
 
           {/* Chat Message Stream (Soft surface-soft: #f7f7f5 from design system) */}
           <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-surface-soft">
@@ -386,31 +525,26 @@ export default function TripChatHub({
             })}
           </div>
 
-          {/* Quick Context Action Chips */}
+          {/* Quick Discussion Prompt Chips for Active Monitoring */}
           {currentUser && (
-            <div className="px-3 pt-2 pb-1 bg-white border-t border-hairline/60 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px]">
-              <span className="text-[10px] font-mono text-neutral-400 font-bold shrink-0 mr-0.5">COPILOT:</span>
-              <button
-                type="button"
-                onClick={() => setInputText('Include Taj Mahal night viewing batch on Dec 18')}
-                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-hairline border border-hairline text-black/70 text-xs transition-colors cursor-pointer"
-              >
-                Taj Mahal Night Batch
-              </button>
-              <button
-                type="button"
-                onClick={() => setInputText('Aim to keep total per-person budget under ₹15,000')}
-                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-hairline border border-hairline text-black/70 text-xs transition-colors cursor-pointer"
-              >
-                Budget &lt; ₹15,000
-              </button>
-              <button
-                type="button"
-                onClick={() => setInputText('Ensure Hampi Virupaksha sunset timed slot is reserved')}
-                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-hairline border border-hairline text-black/70 text-xs transition-colors cursor-pointer"
-              >
-                Reserve Hampi Sunset
-              </button>
+            <div className="px-3 pt-2 pb-1.5 bg-white border-t border-hairline/60 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px]">
+              <span className="caption-mono text-[10px] text-black/40 font-bold shrink-0 mr-1">DISCUSS:</span>
+              {[
+                { label: 'Check Budget Target', prompt: "What is our per-person budget target, and are we within limits?" },
+                { label: 'Suggest Best Dates', prompt: "Suggest optimal dates and flight timings for our trip." },
+                { label: 'Check Heritage Tickets', prompt: "Check ASI heritage monument entry tickets and slot availability." },
+                { label: 'Quorum Split Math', prompt: "@copilot compute the fair double-entry split and quorum consensus." },
+                { label: 'Reserve Sunset Batch', prompt: "Let's secure the Virupaksha sunset timed batch for all travelers." },
+              ].map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => handleSendMessage(null, chip.prompt)}
+                  className="whitespace-nowrap px-3 py-1 rounded-pill bg-surface-soft hover:bg-hairline hover:text-black border border-hairline text-black/70 text-xs transition-colors cursor-pointer shrink-0 font-medium"
+                >
+                  {chip.label}
+                </button>
+              ))}
             </div>
           )}
 
@@ -421,13 +555,13 @@ export default function TripChatHub({
                 type="text"
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                placeholder="Share trip ideas, budget, or preferred places..."
+                placeholder="Ask a question, propose places, or discuss budget (Copilot is monitoring)..."
                 className="flex-1 bg-surface-soft border border-hairline rounded-pill px-4 py-2.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-black transition-all"
               />
               <button
                 type="submit"
                 disabled={sending || !inputText.trim()}
-                className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shrink-0 disabled:opacity-40 active:scale-95 transition-all shadow-xs"
+                className="w-9 h-9 rounded-full bg-slate-900 hover:bg-black text-white flex items-center justify-center shrink-0 disabled:opacity-40 active:scale-95 transition-all shadow-xs cursor-pointer"
               >
                 <Send className="w-4 h-4" />
               </button>
@@ -721,6 +855,107 @@ export default function TripChatHub({
           </div>
         </div>
       </div>
+
+      {/* Add Traveler to Trip Modal */}
+      {addMemberOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-hairline shadow-2xl p-6 relative">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-hairline">
+              <div>
+                <span className="eyebrow-mono text-black/50 block">TRIP ROSTER MANAGEMENT</span>
+                <h3 className="text-base font-bold text-black tracking-tight mt-0.5">
+                  Add Traveler to Trip
+                </h3>
+              </div>
+              <button
+                onClick={() => setAddMemberOpen(false)}
+                className="w-8 h-8 rounded-full bg-surface-soft hover:bg-hairline flex items-center justify-center text-black/60 hover:text-black transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddMember} className="space-y-4">
+              <div>
+                <label className="caption-mono block mb-1">Select Registered Traveler</label>
+                <select
+                  required
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="field-input text-xs"
+                >
+                  <option value="">-- Choose a registered user --</option>
+                  {(allUsers || [])
+                    .filter((u) => !(tripDetail?.members || []).some((m) => m.user_id === u.user_id))
+                    .map((u) => (
+                      <option key={u.user_id} value={u.user_id}>
+                        {u.full_name} ({u.email}) · {u.home_city || 'India'}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[11px] text-black/40 mt-1">
+                  Only travelers not currently in this trip are shown.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="caption-mono block mb-1">Departure / Joining City</label>
+                  <input
+                    type="text"
+                    required
+                    value={newMemberCity}
+                    onChange={(e) => setNewMemberCity(e.target.value)}
+                    placeholder="e.g. Bengaluru"
+                    className="field-input text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="caption-mono block mb-1">Budget Ceiling (INR)</label>
+                  <input
+                    type="number"
+                    required
+                    min="1000"
+                    step="500"
+                    value={newMemberBudget}
+                    onChange={(e) => setNewMemberBudget(Number(e.target.value))}
+                    className="field-input text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="caption-mono block mb-1">Role in Group</label>
+                <select
+                  value={newMemberRole}
+                  onChange={(e) => setNewMemberRole(e.target.value)}
+                  className="field-input text-xs"
+                >
+                  <option value="MEMBER">Member (Voting & Split Participant)</option>
+                  <option value="ORGANIZER">Co-Organizer</option>
+                </select>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-hairline">
+                <button
+                  type="button"
+                  onClick={() => setAddMemberOpen(false)}
+                  className="btn-secondary flex-1 text-xs py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={memberActionLoading || !selectedUserId}
+                  className="btn-primary flex-1 text-xs py-2 font-semibold"
+                >
+                  {memberActionLoading ? 'Adding...' : 'Add Traveler'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

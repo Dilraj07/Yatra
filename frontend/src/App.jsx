@@ -303,6 +303,7 @@ export default function App({ hasClerk = true }) {
               setActiveTripId={setActiveTripId}
               trips={trips}
               tripDetail={tripDetail}
+              allUsers={allUsers}
               itineraries={itineraries}
               proposals={proposals}
               slots={slots}

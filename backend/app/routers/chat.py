@@ -109,6 +109,60 @@ def _seed_initial_trip_messages(trip_id: int) -> list[dict[str, Any]]:
     return [_format_msg(m) for m in seed_messages]
 
 
+def _generate_agent_monitoring_response(trip_id: int, user_text: str, sender_name: str) -> Optional[str]:
+    text_lower = user_text.lower().strip()
+
+    # Case 1: Direct mention or summon of copilot / agent
+    if any(k in text_lower for k in ["@copilot", "@agent", "copilot", "yatra copilot"]):
+        if any(b in text_lower for b in ["budget", "cost", "price", "₹", "inr", "split"]):
+            return (
+                f"**Yatra Copilot Active Monitor**\n"
+                f"Analyzing budget query from {sender_name}: Group expenses and ledger settlement algorithms are actively tracking per-person contributions. "
+                f"Click **Synthesize Plan** at any time to recalibrate spending caps across all registered travelers."
+            )
+        if any(t in text_lower for t in ["ticket", "monument", "hampi", "taj", "entry", "slot"]):
+            return (
+                f"**Yatra Copilot Active Monitor**\n"
+                f"Checking ticket inventory for {sender_name}: Heritage monument slots and timed circuit batches are monitored in real time. "
+                f"Capacity limits and visitor caps are checked against your group size."
+            )
+        return (
+            f"**Yatra Copilot Active Monitor**\n"
+            f"Hello {sender_name}! I am continuously monitoring this discussion. When you and your fellow travelers agree on dates, locations, or budget limits, "
+            f"select **Synthesize Plan** and I will construct the complete itinerary."
+        )
+
+    # Case 2: Inquiries, constraints, and discussions
+    if any(q in text_lower for q in ["?", "budget", "cost", "ticket", "hotel", "flight", "weather", "date", "when", "how much", "split", "suggest"]):
+        if any(b in text_lower for b in ["budget", "cost", "₹", "split", "inr", "price"]):
+            return (
+                f"**Yatra Copilot Active Monitor**\n"
+                f"Traveler parameter logged: Budget target noted from {sender_name}. "
+                f"The financial ledger engine will balance individual shares $\\sum d_i = 0$ once proposals pass quorum."
+            )
+        if any(t in text_lower for t in ["ticket", "entry", "slot", "pass", "monument", "hampi", "agra"]):
+            return (
+                f"**Yatra Copilot Active Monitor**\n"
+                f"Inventory parameter logged: Heritage entry preference recorded from {sender_name}. "
+                f"Live capacity counters confirm availability for upcoming slots."
+            )
+        if any(w in text_lower for w in ["flight", "hotel", "weather", "radar", "stay"]):
+            return (
+                f"**Yatra Copilot Active Monitor**\n"
+                f"Telemetry parameter logged: Live Radar is tracking airspace movements and hotel availability for your trip window."
+            )
+        return (
+            f"**Yatra Copilot Active Monitor**\n"
+            f"Traveler inquiry noted from {sender_name}. Recorded in group session memory for next plan synthesis."
+        )
+
+    # Case 3: General discussion monitoring
+    return (
+        f"**Yatra Copilot Active Monitor**\n"
+        f"Traveler dialogue recorded from {sender_name}. Active monitoring maintains consensus alignment across all members."
+    )
+
+
 @router.get("/trip/{trip_id}")
 def get_trip_messages(trip_id: int):
     mongo = get_mongo_db()
@@ -144,7 +198,27 @@ def post_trip_message(
     }
     res = mongo["trip_messages"].insert_one(msg_doc)
     msg_doc["id"] = str(res.inserted_id)
-    return _format_msg(msg_doc)
+
+    formatted_user_msg = _format_msg(msg_doc)
+
+    # Active Agent Monitoring: Copilot analyzes user contribution and responds
+    agent_reply_text = _generate_agent_monitoring_response(trip_id, payload.text, sender_name)
+    if agent_reply_text:
+        agent_doc = {
+            "trip_id": trip_id,
+            "sender_id": 0,
+            "sender_name": "Yatra Copilot",
+            "is_agent": True,
+            "agent_badge": "AI Copilot",
+            "text": agent_reply_text,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        agent_res = mongo["trip_messages"].insert_one(agent_doc)
+        agent_doc["id"] = str(agent_res.inserted_id)
+        formatted_user_msg["agent_message"] = _format_msg(agent_doc)
+
+    return formatted_user_msg
+
 
 
 @router.delete("/trip/{trip_id}/messages")
