@@ -63,6 +63,38 @@ def test_feature1_jwt_access_token():
     assert "exp" in payload, "JWT missing expiration claim"
 
 
+def test_feature1_clerk_user_sync(monkeypatch):
+    from app.services import auth_service
+    from app.schemas.auth import ClerkSyncRequest
+    from app.repositories import user_repo
+
+    mock_db = {}
+
+    def mock_get_user_by_email(email):
+        return mock_db.get(email)
+
+    def mock_create_user(email, full_name, home_city, password_hash):
+        u = {"user_id": 99, "email": email, "full_name": full_name, "home_city": home_city}
+        mock_db[email] = u
+        return u
+
+    monkeypatch.setattr(user_repo, "get_user_by_email", mock_get_user_by_email)
+    monkeypatch.setattr(user_repo, "create_user", mock_create_user)
+
+    req = ClerkSyncRequest(
+        email="clerk_traveler@gmail.com",
+        full_name="Clerk Traveler",
+        clerk_id="user_clerk_123",
+        avatar_url="https://images.clerk.dev/avatar.png"
+    )
+    result = auth_service.sync_clerk_user(req)
+    assert "access_token" in result
+    assert result["user"]["email"] == "clerk_traveler@gmail.com"
+    assert result["user"]["full_name"] == "Clerk Traveler"
+    assert result["user"]["avatar_url"] == "https://images.clerk.dev/avatar.png"
+
+
+
 # =============================================================================
 # FEATURE 2: Live Airspace Flight Radar (OpenSky Network ADS-B)
 # =============================================================================

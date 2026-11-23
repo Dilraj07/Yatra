@@ -16,7 +16,8 @@ import {
   Radio,
   Database,
 } from 'lucide-react';
-import { apiRequest, clearAuthSession, getStoredUser, setAuthSession } from './api/client';
+import { useUser, useClerk, UserButton } from '@clerk/react';
+import { apiRequest, clearAuthSession, getStoredUser, setAuthSession, clerkSync } from './api/client';
 import AuthModal from './components/AuthModal';
 import ConstraintBanner from './components/ConstraintBanner';
 import TripChatHub from './components/TripChatHub';
@@ -39,12 +40,16 @@ const WORKSPACE_TABS = [
   { id: 'trips', label: 'All Trips', icon: Compass },
 ];
 
-export default function App() {
+export default function App({ hasClerk = true }) {
   const [user, setUser] = useState(() => getStoredUser());
   const [authOpen, setAuthOpen] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [activeTab, setActiveTab] = useState('chat');
   const [isScrolled, setIsScrolled] = useState(false);
+
+  // Clerk Authentication Hooks
+  const { isLoaded: clerkLoaded, isSignedIn: clerkSignedIn, user: clerkUser } = useUser();
+  const { signOut: clerkSignOut } = useClerk();
 
   const [status, setStatus] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
@@ -73,6 +78,33 @@ export default function App() {
   const notify = useCallback((type, message, pgDetail = null) => {
     setFeedback({ type, message, pgDetail });
   }, []);
+
+  // Synchronize authenticated Clerk session with Yatra local & backend profile
+  useEffect(() => {
+    if (hasClerk && clerkLoaded && clerkSignedIn && clerkUser) {
+      const clerkEmail = clerkUser.primaryEmailAddress?.emailAddress || `${clerkUser.id}@clerk.local`;
+      if (!user || user.clerk_id !== clerkUser.id || user.email !== clerkEmail) {
+        clerkSync(clerkUser).then((synced) => {
+          setUser({ ...synced, clerk_id: clerkUser.id });
+          notify('success', `Signed in as ${synced.full_name} via Clerk`);
+        });
+      }
+    }
+  }, [hasClerk, clerkLoaded, clerkSignedIn, clerkUser, user, notify]);
+
+  const handleSignOut = async () => {
+    if (clerkSignedIn) {
+      try {
+        await clerkSignOut();
+      } catch (err) {
+        console.warn('Clerk sign out:', err);
+      }
+    }
+    clearAuthSession();
+    setUser(null);
+    notify('success', 'Signed out successfully.');
+  };
+
 
   const refreshAll = useCallback(async (targetTripId) => {
     const tid = targetTripId || activeTripId;
@@ -182,37 +214,56 @@ export default function App() {
             {user ? (
               <div className="flex items-center gap-2">
                 <div className="relative group">
-                  <button className="flex items-center gap-2 text-xs font-semibold px-3.5 py-1.5 rounded-pill bg-surface-soft hover:bg-hairline text-black border border-hairline transition-colors">
-                    <div className="w-5 h-5 rounded-full bg-sky-100 border border-sky-300 text-sky-900 flex items-center justify-center text-[10px] font-bold">
-                      {user.full_name?.charAt(0) || 'U'}
-                    </div>
+                  <button className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-pill bg-surface-soft hover:bg-hairline text-black border border-hairline transition-colors">
+                    {user.avatar_url ? (
+                      <img
+                        src={user.avatar_url}
+                        alt={user.full_name}
+                        className="w-5 h-5 rounded-full object-cover border border-hairline"
+                      />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-sky-100 border border-sky-300 text-sky-900 flex items-center justify-center text-[10px] font-bold">
+                        {user.full_name?.charAt(0) || 'U'}
+                      </div>
+                    )}
                     <span className="max-w-[120px] truncate">{user.full_name}</span>
                     <ChevronDown className="w-3 h-3 text-black/40" />
                   </button>
-                  <div className="absolute right-0 mt-1 w-48 bg-white border border-hairline rounded-xl shadow-lg p-2 hidden group-hover:block z-50">
+                  <div className="absolute right-0 mt-1 w-52 bg-white border border-hairline rounded-xl shadow-lg p-2 hidden group-hover:block z-50">
                     <div className="px-2 py-1.5 border-b border-hairline mb-1">
-                      <span className="text-xs font-bold text-black block truncate">{user.full_name}</span>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-xs font-bold text-black block truncate">{user.full_name}</span>
+                        {clerkSignedIn && (
+                          <span className="text-[9px] font-mono uppercase bg-emerald-50 text-emerald-800 px-1.5 py-0.5 rounded-sm border border-emerald-200">
+                            Clerk
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[11px] text-black/50 block truncate">{user.email}</span>
                     </div>
                     <button
-                      onClick={() => {
-                        clearAuthSession();
-                        setUser(null);
-                        notify('success', 'Signed out successfully.');
-                      }}
+                      onClick={handleSignOut}
                       className="w-full text-left px-2.5 py-1.5 text-xs rounded-lg text-rose-600 hover:bg-rose-50 flex items-center gap-1.5 font-medium transition-colors"
                     >
                       <LogOut className="w-3.5 h-3.5" /> Sign out
                     </button>
                   </div>
                 </div>
+
+                {/* Native Clerk UserButton when Clerk session is active */}
+                {clerkSignedIn && (
+                  <div className="flex items-center">
+                    <UserButton afterSignOutUrl="/" />
+                  </div>
+                )}
               </div>
             ) : (
               <button
                 onClick={() => setAuthOpen(true)}
-                className="btn-primary text-xs py-2 px-5"
+                className="btn-primary text-xs py-2 px-5 flex items-center gap-1.5"
               >
-                Sign in
+                <User className="w-3.5 h-3.5" />
+                <span>Sign in</span>
               </button>
             )}
           </div>
@@ -357,6 +408,7 @@ export default function App() {
       <AuthModal
         open={authOpen}
         onClose={() => setAuthOpen(false)}
+        hasClerk={hasClerk}
         onAuthSuccess={(u) => {
           setUser(u);
           notify('success', `Signed in as ${u.full_name}`);

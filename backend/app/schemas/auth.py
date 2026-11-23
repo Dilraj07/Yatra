@@ -11,3 +11,12 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class ClerkSyncRequest(BaseModel):
+    email: EmailStr
+    full_name: str = Field(default="Traveler", max_length=120)
+    clerk_id: str | None = None
+    home_city: str = Field(default="Bengaluru", max_length=80)
+    avatar_url: str | None = None
+

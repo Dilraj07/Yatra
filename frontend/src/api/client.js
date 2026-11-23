@@ -22,6 +22,39 @@ export function clearAuthSession() {
   localStorage.removeItem('yatra_user');
 }
 
+export async function clerkSync(clerkUser) {
+  const email = clerkUser?.primaryEmailAddress?.emailAddress || clerkUser?.emailAddresses?.[0]?.emailAddress || `${clerkUser.id}@clerk.local`;
+  const fullName = clerkUser?.fullName || clerkUser?.firstName || 'Traveler';
+  const clerkId = clerkUser?.id || '';
+  const avatarUrl = clerkUser?.imageUrl || '';
+
+  try {
+    const res = await apiRequest('/api/auth/clerk-sync', {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        full_name: fullName,
+        clerk_id: clerkId,
+        avatar_url: avatarUrl,
+      }),
+    });
+    setAuthSession(res.access_token, res.user);
+    return res.user;
+  } catch (err) {
+    console.warn('Backend clerk-sync unavailable, using local session fallback:', err);
+    const fallbackUser = {
+      user_id: 100,
+      full_name: fullName,
+      email: email,
+      role: 'MEMBER',
+      avatar_url: avatarUrl,
+      clerk_id: clerkId,
+    };
+    setAuthSession(`clerk_tok_${clerkId}`, fallbackUser);
+    return fallbackUser;
+  }
+}
+
 export function getStoredUser() {
   try {
     const raw = localStorage.getItem('yatra_user');

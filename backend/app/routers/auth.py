@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.repositories import user_repo
-from app.schemas.auth import LoginRequest, RegisterRequest
+from app.schemas.auth import ClerkSyncRequest, LoginRequest, RegisterRequest
 from app.services import auth_service
 
 router = APIRouter(prefix="/api/auth", tags=["Auth & Users"])
@@ -17,6 +17,12 @@ def login(payload: LoginRequest):
     return auth_service.login_user(payload)
 
 
+@router.post("/clerk-sync")
+def clerk_sync(payload: ClerkSyncRequest):
+    return auth_service.sync_clerk_user(payload)
+
+
 @router.get("/users")
 def list_users():
     return user_repo.list_users()
+
