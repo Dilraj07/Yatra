@@ -214,62 +214,51 @@ export default function TripChatHub({
 
   return (
     <div className="space-y-6">
-      {/* Sleek Condensed Trip Header */}
-      <div className="bg-white border border-hairline rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-mono font-bold uppercase tracking-wider text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
-              Trip #{tripDetail?.trip_id || activeTripId}
-            </span>
-            <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
-              {tripDetail?.status || 'Active'}
-            </span>
-            <span className="text-xs text-neutral-300">·</span>
-            <span className="text-xs text-neutral-500">
-              Quorum: {tripDetail?.quorum_pct || 60}% YES required
-            </span>
-            <span className="text-xs text-neutral-300">·</span>
-            <span className="text-xs text-neutral-500">
-              {tripDetail?.travel_window
-                ? String(tripDetail.travel_window).replace(/[[\]()"]/g, '').split(',').join(' → ')
-                : 'Dec 18 → 22, 2026'}
-            </span>
-            <span className="text-xs text-neutral-300">·</span>
-            <span className="text-xs font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
-              25 Days to Departure · Goa (GOI)
-            </span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
-            {tripDetail?.title || 'Goa & Hampi Winter Heritage 2026'}
-          </h1>
-          <div className="flex items-center gap-2 text-xs text-neutral-500 pt-0.5">
-            <span className="font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">26.5°C Clear Skies</span>
-            <span>·</span>
-            <span>Route: Bengaluru ✈️ Goa 🏖️ Hampi 🏛️ Bengaluru</span>
+      {/* Trip Header Banner */}
+      <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-semibold uppercase tracking-wider bg-block-lime text-black border border-black/10">
+                <Compass className="w-3.5 h-3.5" /> Group Trip
+              </span>
+              <span className="text-xs font-mono px-2.5 py-0.5 rounded-pill bg-surface-soft border border-hairline text-black/70">
+                {tripDetail?.status || 'Active'}
+              </span>
+            </div>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-black">
+              {tripDetail?.title || 'Trip Discussion'}
+            </h1>
+            <div className="flex flex-wrap items-center gap-4 text-xs text-black/60 pt-0.5">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-black/40" />{' '}
+                {tripDetail?.travel_window
+                  ? String(tripDetail.travel_window).replace(/[[\]()"]/g, '').split(',').join(' to ')
+                  : 'Dec 18 - 20, 2026'}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-black/40" /> {memberCount} Travelers
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Vote className="w-3.5 h-3.5 text-black/40" /> Quorum: {tripDetail?.quorum_pct || 60}%
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Compact Travelers List */}
-        <div className="flex items-center gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-hairline shrink-0">
-          <span className="text-xs text-neutral-400 font-medium mr-1">Travelers:</span>
-          <div className="flex items-center -space-x-1.5">
-            {(tripDetail?.members || []).map((m) => {
-              const meta = (m.full_name || '').toLowerCase().includes('dilraj')
-                ? { initials: 'DS', bg: 'bg-purple-100 text-purple-800 border-purple-200' }
-                : (m.full_name || '').toLowerCase().includes('arya')
-                ? { initials: 'AW', bg: 'bg-sky-100 text-sky-800 border-sky-200' }
-                : { initials: 'AL', bg: 'bg-amber-100 text-amber-800 border-amber-200' };
-              return (
-                <div
-                  key={m.user_id}
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-white shadow-xs ${meta.bg}`}
-                  title={`${m.full_name} (${m.role})`}
-                >
-                  {meta.initials}
-                </div>
-              );
-            })}
-          </div>
+        {/* Informational Member Badges */}
+        <div className="flex flex-wrap items-center gap-2 pt-4 mt-4 border-t border-hairline">
+          <span className="text-xs font-medium text-black/50 mr-1">Travelers in this trip:</span>
+          {(tripDetail?.members || []).map((m) => (
+            <div
+              key={m.user_id}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs bg-surface-soft text-black border border-hairline font-medium"
+            >
+              <span className="w-2 h-2 rounded-full bg-semantic-success"></span>
+              <span>{m.full_name}</span>
+              <span className="text-[10px] text-black/50 capitalize">({m.role?.toLowerCase()})</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -404,23 +393,23 @@ export default function TripChatHub({
               <button
                 type="button"
                 onClick={() => setInputText('Include Taj Mahal night viewing batch on Dec 18')}
-                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-slate-100 border border-hairline text-slate-700 transition-colors cursor-pointer"
+                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-hairline border border-hairline text-black/70 text-xs transition-colors cursor-pointer"
               >
-                ⚡ Taj Mahal Night Batch
+                Taj Mahal Night Batch
               </button>
               <button
                 type="button"
                 onClick={() => setInputText('Aim to keep total per-person budget under ₹15,000')}
-                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-slate-100 border border-hairline text-slate-700 transition-colors cursor-pointer"
+                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-hairline border border-hairline text-black/70 text-xs transition-colors cursor-pointer"
               >
-                💰 Budget &lt; ₹15,000
+                Budget &lt; ₹15,000
               </button>
               <button
                 type="button"
                 onClick={() => setInputText('Ensure Hampi Virupaksha sunset timed slot is reserved')}
-                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-slate-100 border border-hairline text-slate-700 transition-colors cursor-pointer"
+                className="whitespace-nowrap px-2.5 py-1 rounded-full bg-surface-soft hover:bg-hairline border border-hairline text-black/70 text-xs transition-colors cursor-pointer"
               >
-                🏛️ Reserve Hampi Sunset
+                Reserve Hampi Sunset
               </button>
             </div>
           )}
@@ -507,27 +496,21 @@ export default function TripChatHub({
                   </p>
                 </div>
                 {primaryProposal && (
-                  <span
-                    className={`text-xs px-2.5 py-1 rounded-pill font-mono font-medium border ${
-                      isQuorumMet
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : 'bg-amber-50 text-amber-800 border-amber-200'
-                    }`}
-                  >
-                    Quorum: {currentApprovalPct}% ({isQuorumMet ? 'Satisfied' : `${quorumRequiredPct}% Req`})
+                  <span className="text-xs px-2.5 py-1 rounded-pill font-mono bg-block-cream font-medium text-black border border-black/10">
+                    Quorum: {primaryProposal.approval_pct}%
                   </span>
                 )}
               </div>
 
-              {/* Cost Summary Banner (Pastel Lime) */}
-              <div className="rounded-xl bg-block-lime/40 border border-block-lime p-3.5 flex items-center justify-between">
+              {/* Total Cost Highlight Card */}
+              <div className="p-4 rounded-xl bg-surface-soft border border-hairline flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] font-semibold text-black/60 block">ESTIMATED PER-PERSON</span>
-                  <span className="text-lg font-bold font-mono text-black">₹{costPerPerson.toLocaleString()}</span>
+                  <span className="caption-mono block text-black/50">ESTIMATED PER-PERSON</span>
+                  <span className="text-2xl font-bold font-mono text-black">₹{costPerPerson.toLocaleString()}</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-[11px] font-semibold text-black/60 block">TOTAL GROUP COST</span>
-                  <span className="text-sm font-bold font-mono text-black">₹{totalCost.toLocaleString()}</span>
+                  <span className="caption-mono block text-black/50">TOTAL GROUP COST</span>
+                  <span className="text-sm font-bold font-mono text-black/70">₹{totalCost.toLocaleString()}</span>
                 </div>
               </div>
 

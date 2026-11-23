@@ -31,9 +31,10 @@ import AuditSection from './components/AuditSection';
 
 const WORKSPACE_TABS = [
   { id: 'chat', label: 'Trip Workspace', icon: MessageSquare },
-  { id: 'radar', label: 'Live Flights & Hotels', icon: Radio },
+  { id: 'radar', label: 'Live Radar', icon: Radio },
   { id: 'voting', label: 'Group Approvals', icon: Vote },
-  { id: 'saga', label: 'Booking Engine (2PC)', icon: ShieldCheck },
+  { id: 'saga', label: 'Booking Engine', icon: ShieldCheck },
+  { id: 'tickets', label: 'Heritage Tickets', icon: Ticket },
   { id: 'audit', label: 'Database Logs', icon: Database },
   { id: 'trips', label: 'All Trips', icon: Compass },
 ];
@@ -135,14 +136,13 @@ export default function App() {
       >
         <div className="max-w-[1280px] mx-auto h-full px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-6">
-            {/* Iconic यात्रा Yatra Logo */}
-            <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setActiveTab('chat')}>
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-600 text-white flex items-center justify-center font-black shadow-xs group-hover:scale-105 transition-transform">
-                <span className="text-lg leading-none font-bold">या</span>
+            {/* Confident Editorial Logo */}
+            <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab('chat')}>
+              <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold shadow-2xs">
+                <Compass className="w-4.5 h-4.5 text-sky-400" />
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-extrabold tracking-tight text-orange-600">यात्रा</span>
-                <span className="text-xl font-bold tracking-tight text-slate-900">Yatra</span>
+                <span className="text-xl font-bold tracking-tight text-black">Yatra</span>
                 <span className="hidden sm:inline-block text-[11px] font-mono uppercase tracking-wider text-black/50">
                   Smart Group Tourism
                 </span>
@@ -169,12 +169,6 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Database Engine Status Badge */}
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-mono font-medium bg-emerald-50 border border-emerald-200 text-emerald-800 shadow-2xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>PostgreSQL 16 · GiST & ACID</span>
-            </div>
-
             {/* Refresh Button */}
             <button
               onClick={() => refreshAll(activeTripId)}
@@ -226,8 +220,8 @@ export default function App() {
       </header>
 
       {/* Modern Segmented Navigation Tabs */}
-      <div className="max-w-[1280px] mx-auto w-full px-6 pt-5 pb-1">
-        <div className="bg-surface-soft p-1.5 rounded-2xl border border-hairline inline-flex items-center gap-1 overflow-x-auto max-w-full no-scrollbar shadow-2xs">
+      <div className="max-w-[1280px] mx-auto w-full px-6 pt-6 pb-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar border-b border-hairline pb-3">
           {WORKSPACE_TABS.map((t) => {
             const Icon = t.icon;
             const isActive = activeTab === t.id;
@@ -235,13 +229,13 @@ export default function App() {
               <button
                 key={t.id}
                 onClick={() => setActiveTab(t.id)}
-                className={`whitespace-nowrap px-4 py-2 text-xs font-semibold rounded-xl flex items-center gap-2 transition-all duration-200 ease-out active:scale-95 ${
+                className={`whitespace-nowrap px-4 py-2 text-xs font-semibold rounded-pill flex items-center gap-1.5 transition-all duration-200 ease-out active:scale-95 ${
                   isActive
-                    ? 'bg-white text-slate-900 border border-hairline font-bold shadow-xs scale-[1.01]'
-                    : 'text-neutral-500 hover:text-slate-900 hover:bg-white/60 border border-transparent'
+                    ? 'bg-white text-black border border-hairline font-semibold shadow-xs scale-[1.02]'
+                    : 'text-black/60 hover:text-black hover:bg-surface-soft border border-transparent'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 transition-transform duration-200 ${isActive ? 'scale-110 text-orange-600' : 'text-neutral-400'}`} />
+                <Icon className={`w-3.5 h-3.5 transition-transform duration-200 ${isActive ? 'scale-110 text-black' : 'text-black/40'}`} />
                 <span>{t.label}</span>
               </button>
             );
@@ -350,7 +344,6 @@ export default function App() {
       <footer className="border-t border-hairline bg-canvas py-6 px-6 mt-auto">
         <div className="max-w-[1280px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink/50">
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-orange-600">यात्रा</span>
             <span className="font-bold text-ink">Yatra</span>
             <span>·</span>
             <span>Smart Group Tourism Platform</span>

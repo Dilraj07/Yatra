@@ -35,20 +35,10 @@ export default function AuditSection({ auditRows = [], nosqlDocs = {} }) {
       {/* Header Banner */}
       <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-xs font-mono bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              PARTITIONED RELATIONAL AUDIT & NOSQL SNAPSHOTS
-            </span>
-            <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full border border-slate-200">
-              ACID Compliant Logging
-            </span>
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 mt-2">
-            PostgreSQL Partitioned Logs & System Observability
-          </h2>
+          <span className="eyebrow-mono text-black/60">SYSTEM OBSERVABILITY</span>
+          <h2 className="display-lg mt-1 text-black">Audit Trails & NoSQL Snapshots</h2>
           <p className="text-xs text-neutral-500 max-w-2xl mt-1">
-            Real-time audit trails partitioned by monthly range tables (e.g. <code className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-800">audit_log_2026_11</code>) with automated database triggers capturing every relational mutation and JSON before/after state.
+            Real-time audit trails partitioned by monthly range tables with automated database triggers capturing every relational mutation and JSON before/after state.
           </p>
         </div>
       </div>

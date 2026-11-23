@@ -120,27 +120,12 @@ export default function TripsSection({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="color-block bg-block-lime space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 text-xs font-mono bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              TRIP DIRECTORY & GOVERNANCE
-            </span>
-            <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full border border-slate-200">
-              PostgreSQL Multi-Party Schema
-            </span>
-          </div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 mt-2">
-            All Group Trips & Travel Circles
-          </h2>
-          <p className="text-xs text-neutral-500 max-w-2xl mt-1">
-            Browse all group travel plans, configure travelers and budget ceilings, or create a new group tourism trip with database-enforced quorum policies.
-          </p>
+          <span className="eyebrow-mono">TRIP SETTINGS & TRAVELERS</span>
+          <h2 className="display-lg mt-1">Manage your group and quorum threshold.</h2>
         </div>
-
         <button
           onClick={() => setSubTab('create')}
           className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shrink-0 cursor-pointer"
