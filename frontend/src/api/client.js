@@ -92,6 +92,10 @@ const MOCK_DATA = {
     { user_id: 1, full_name: 'Dilraj Singh', email: 'dilraj@yatra.local', home_city: 'Bengaluru' },
     { user_id: 2, full_name: 'Arya Wadhwa', email: 'arya@yatra.local', home_city: 'Delhi' },
     { user_id: 3, full_name: 'Aarush Luthra', email: 'aarush@yatra.local', home_city: 'Mumbai' },
+    { user_id: 4, full_name: 'Priya Sharma', email: 'priya@yatra.local', home_city: 'Pune' },
+    { user_id: 5, full_name: 'Rohan Gupta', email: 'rohan@yatra.local', home_city: 'Jaipur' },
+    { user_id: 6, full_name: 'Ananya Iyer', email: 'ananya@yatra.local', home_city: 'Chennai' },
+    { user_id: 7, full_name: 'Vikram Malhotra', email: 'vikram@yatra.local', home_city: 'Hyderabad' },
   ],
   '/api/trips': [
     {
@@ -282,7 +286,8 @@ export async function apiRequest(path, options = {}) {
 
     if (!res.ok) {
       if (options.method && options.method !== 'GET') {
-        _handleMockMutation(path, options);
+        const mocked = _handleMockMutation(path, options);
+        if (mocked) return mocked;
         return { success: true, message: 'Action completed (Sandbox Mode)' };
       }
       const cleanPath = path.split('?')[0];
@@ -302,7 +307,8 @@ export async function apiRequest(path, options = {}) {
   } catch (netErr) {
     // If backend is offline, return pre-seeded mock data so demo is 100% unbreakable!
     if (options.method && options.method !== 'GET') {
-      _handleMockMutation(path, options);
+      const mocked = _handleMockMutation(path, options);
+      if (mocked) return mocked;
       return { success: true, message: 'Updated locally in sandbox mode' };
     }
     const cleanPath = path.split('?')[0];
@@ -322,21 +328,69 @@ function _handleMockMutation(path, options) {
         if (options.method === 'POST') {
           const body = JSON.parse(options.body || '{}');
           const users = MOCK_DATA['/api/auth/users'] || [];
-          const userObj = users.find((u) => u.user_id === Number(body.user_id)) || { full_name: `Traveler ${body.user_id}` };
-          if (!MOCK_DATA[tripKey].members.some((m) => m.user_id === Number(body.user_id))) {
-            MOCK_DATA[tripKey].members.push({
+          const userObj = users.find((u) => u.user_id === Number(body.user_id)) || {
+            full_name: body.full_name || `Traveler ${body.user_id}`,
+            email: `user_${body.user_id}@yatra.local`,
+          };
+          const existing = MOCK_DATA[tripKey].members.find((m) => m.user_id === Number(body.user_id));
+          if (!existing) {
+            const newMem = {
               user_id: Number(body.user_id),
               full_name: userObj.full_name,
+              email: userObj.email || `user_${body.user_id}@yatra.local`,
               role: body.role || 'MEMBER',
               joining_city: body.joining_city || 'Bengaluru',
               budget_ceiling: Number(body.budget_ceiling) || 25000,
-            });
+            };
+            MOCK_DATA[tripKey].members.push(newMem);
+            return newMem;
           }
+          return existing;
         } else if (options.method === 'DELETE') {
           const delUserId = Number(path.split('/').pop());
           MOCK_DATA[tripKey].members = MOCK_DATA[tripKey].members.filter((m) => m.user_id !== delUserId);
+          return { status: 'success', message: `Member ${delUserId} removed` };
         }
       }
+    } else if (path.includes('/messages')) {
+      const match = path.match(/\/api\/chat\/trip\/(\d+)\/messages/);
+      const tripId = match ? match[1] : '1';
+      const chatKey = `/api/chat/trip/${tripId}`;
+      if (!MOCK_DATA[chatKey]) MOCK_DATA[chatKey] = [];
+      const body = JSON.parse(options.body || '{}');
+      const newMsg = {
+        id: `msg_${Date.now()}`,
+        trip_id: Number(tripId),
+        sender_id: body.sender_id || 2,
+        sender_name: body.sender_name || 'Arya Wadhwa',
+        is_agent: false,
+        text: body.text,
+        created_at: new Date().toISOString(),
+      };
+      MOCK_DATA[chatKey].push(newMsg);
+
+      // Generate local agent monitor reply
+      const lower = (body.text || '').toLowerCase();
+      let agentText = `Traveler dialogue recorded from ${newMsg.sender_name}. Parameters tracked in group memory.`;
+      if (lower.includes('budget') || lower.includes('cost') || lower.includes('split') || lower.includes('₹')) {
+        agentText = `Budget parameter noted from ${newMsg.sender_name}. Financial ledger balance equation $$\\sum d_i = 0$$ is being calculated for current members.`;
+      } else if (lower.includes('ticket') || lower.includes('hampi') || lower.includes('monument')) {
+        agentText = `Heritage inventory checked for ${newMsg.sender_name}. Capacity limits confirmed for upcoming time slots.`;
+      }
+
+      const agentMsg = {
+        id: `agent_${Date.now() + 1}`,
+        trip_id: Number(tripId),
+        sender_id: 0,
+        sender_name: 'Yatra Copilot',
+        is_agent: true,
+        agent_badge: 'AI Copilot',
+        text: agentText,
+        created_at: new Date().toISOString(),
+      };
+      MOCK_DATA[chatKey].push(agentMsg);
+
+      return { ...newMsg, agent_message: agentMsg };
     }
   } catch (_) {}
 }

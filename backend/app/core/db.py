@@ -38,7 +38,7 @@ def close_db() -> None:
 def get_pg_conn() -> Generator[psycopg.Connection[Any], None, None]:
     if pg_pool is None:
         raise RuntimeError("PostgreSQL connection pool is not initialized")
-    with pg_pool.connection() as conn:
+    with pg_pool.connection(timeout=0.6) as conn:
         yield conn
 
 
