@@ -1,10 +1,12 @@
+import os
+import re
 from datetime import datetime, timezone
 from decimal import Decimal
-import re
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+import httpx
 from bson import ObjectId
+from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.config import settings
 from app.core.db import get_mongo_db, get_pg_conn
@@ -109,7 +111,64 @@ def _seed_initial_trip_messages(trip_id: int) -> list[dict[str, Any]]:
     return [_format_msg(m) for m in seed_messages]
 
 
+def _generate_openai_monitoring_response(trip_id: int, user_text: str, sender_name: str) -> Optional[str]:
+    if not settings.openai_api_key:
+        return None
+    transcript = ""
+    try:
+        mongo = get_mongo_db()
+        cursor = mongo["trip_messages"].find({"trip_id": trip_id}).sort("created_at", -1).limit(6)
+        recent_msgs = list(cursor)
+        recent_msgs.reverse()
+        transcript = "\n".join([f"{m.get('sender_name', 'Traveler')}: {m.get('text', '')}" for m in recent_msgs])
+    except Exception:
+        transcript = ""
+
+    system_prompt = (
+        "You are 'Yatra Copilot', an AI travel assistant actively monitoring a group trip discussion for an Indian tourism platform. "
+        "Strict rules: "
+        "1. Strictly ZERO emojis anywhere in your response. "
+        "2. Do NOT mention any internal database or software architecture names (such as PostgreSQL, MongoDB, GiST, ACID, 2PC, Redis). "
+        "3. Keep your response concise (2 to 4 sentences). "
+        "4. Tone: helpful, analytical, focused on budgets, dates, attractions, flights, and consensus. "
+        "5. If mathematical or financial formulas are referenced, use LaTeX notation like $$\\sum c_i$$. "
+        "6. Begin with '**Yatra Copilot Active Monitor**\\n'."
+    )
+    user_prompt = f"Recent group dialogue:\n{transcript}\n\nNew message from {sender_name}:\n\"{user_text}\"\n\nGenerate your monitoring response:"
+
+    headers = {
+        "Authorization": f"Bearer {settings.openai_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": settings.openai_model or "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 180,
+    }
+    try:
+        with httpx.Client(timeout=6.0) as client:
+            res = client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            if res.status_code == 200:
+                reply = res.json()["choices"][0]["message"]["content"].strip()
+                # Ensure no emojis slip through
+                reply = re.sub(r"[\U00010000-\U0010ffff\u2600-\u27BF]", "", reply)
+                return reply
+    except Exception:
+        return None
+    return None
+
+
 def _generate_agent_monitoring_response(trip_id: int, user_text: str, sender_name: str) -> Optional[str]:
+    # Check if OpenAI key is configured for live AI response (skip during automated test runs)
+    if settings.openai_api_key and not os.environ.get("PYTEST_CURRENT_TEST"):
+        ai_reply = _generate_openai_monitoring_response(trip_id, user_text, sender_name)
+        if ai_reply:
+            return ai_reply
+
     text_lower = user_text.lower().strip()
 
     # Case 1: Direct mention or summon of copilot / agent

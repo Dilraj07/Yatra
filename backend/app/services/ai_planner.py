@@ -11,6 +11,52 @@ from app.core.db import get_mongo_db, get_pg_conn
 from app.core.exceptions import DomainError, NotFoundError
 
 
+def _extract_intent_with_openai(prompt: str, available_slots: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not settings.openai_api_key:
+        return None
+    slot_brief = [
+        {
+            "slot_id": s["slot_id"],
+            "poi_name": s["poi_name"],
+            "city": s["city"],
+            "circuit": s["circuit"],
+            "window_start": str(s["window_start"]),
+            "window_end": str(s["window_end"]),
+            "seats_remaining": s["seats_remaining"],
+            "price_inr": float(s["price_inr"]),
+        }
+        for s in available_slots
+    ]
+    system_prompt = (
+        "You are Yatra's itinerary drafting copilot. "
+        "Strict rules: Return valid JSON ONLY with keys: destination (string), summary (string), "
+        "selected_slot_ids (list of int matching provided slots), include_flight (bool), "
+        "include_hotel (bool), prefer_budget_inr (number). Strictly zero emojis."
+    )
+    headers = {
+        "Authorization": f"Bearer {settings.openai_api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": settings.openai_model or "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"User request: {prompt}\nAvailable slots: {json.dumps(slot_brief)}"},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.2,
+    }
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            res = client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+            if res.status_code == 200:
+                text = res.json()["choices"][0]["message"]["content"]
+                return json.loads(text)
+    except Exception:
+        return None
+    return None
+
+
 def _extract_intent_with_gemini(prompt: str, available_slots: list[dict[str, Any]]) -> dict[str, Any] | None:
     if not settings.gemini_api_key:
         return None
@@ -115,8 +161,19 @@ def draft_itinerary_with_self_correction(
             cur.execute("SELECT COALESCE(MAX(version), 0) + 1 AS next_ver FROM itinerary WHERE trip_id = %s", (trip_id,))
             next_version = cur.fetchone()["next_ver"]
 
-        intent = _extract_intent_with_gemini(prompt, available_slots)
-        engine_used = "gemini_api" if intent else "local_constraint_nlp"
+        intent = None
+        engine_used = "local_constraint_nlp"
+
+        if settings.openai_api_key:
+            intent = _extract_intent_with_openai(prompt, available_slots)
+            if intent:
+                engine_used = f"openai_{settings.openai_model or 'gpt-4o-mini'}"
+
+        if not intent and settings.gemini_api_key:
+            intent = _extract_intent_with_gemini(prompt, available_slots)
+            if intent:
+                engine_used = "gemini_api"
+
         if not intent:
             intent = _extract_intent_local(prompt, available_slots)
 

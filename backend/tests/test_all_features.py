@@ -374,3 +374,16 @@ def test_feature11_trip_member_management(monkeypatch):
         trip_service.remove_member(1, 1)
     assert "organizer" in str(excinfo.value).lower()
 
+
+# =============================================================================
+# FEATURE 12: OpenAI Configuration & Integration Validation
+# =============================================================================
+def test_feature12_openai_configuration():
+    from app.core.config import settings
+
+    # Verify settings loaded openai_api_key from local environment or .env
+    assert settings.openai_api_key != ""
+    assert settings.openai_api_key.startswith("sk-")
+    assert settings.openai_model in ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
+
+

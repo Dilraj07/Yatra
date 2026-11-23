@@ -63,6 +63,16 @@ app.include_router(expenses.router)
 app.include_router(audit.router)
 
 
+from app.core.config import settings
+
+
 @app.get("/api/health", tags=["Health"])
 def health():
-    return {"status": "ok", "service": "yatra-backend", "version": "2.0.0"}
+    return {
+        "status": "ok",
+        "service": "yatra-backend",
+        "version": "2.0.0",
+        "openai_configured": bool(settings.openai_api_key),
+        "openai_model": settings.openai_model if settings.openai_api_key else None,
+        "ai_engine": f"openai_{settings.openai_model}" if settings.openai_api_key else ("gemini" if settings.gemini_api_key else "local"),
+    }
