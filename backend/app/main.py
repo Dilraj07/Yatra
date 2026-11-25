@@ -6,6 +6,7 @@ import psycopg
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.config import settings
 from app.core.db import close_db, init_db
 from app.core.exceptions import DomainError, domain_error_handler, psycopg_error_handler
 from app.routers import audit, auth, chat, expenses, inventory, itineraries, radar, saga, trips, voting
@@ -32,7 +33,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -89,11 +89,17 @@ export default function PlannerSection({ activeTripId, tripDetail, itineraries, 
 
         {aiTrace && (
           <div className="rounded-md bg-surface-soft p-3 space-y-1.5 font-mono text-xs">
-            {aiTrace.self_correction_trace.map((t, i) => (
-              <div key={i} className={t.status === 'rejected_by_postgres' ? 'bg-block-pink p-1.5 rounded-xs' : 'p-1'}>
-                <strong>[{t.step}]</strong> {t.status || t.engine} {t.sqlstate ? `(${t.sqlstate})` : ''} {t.self_correction || t.title || ''}
-              </div>
-            ))}
+            {aiTrace.self_correction_trace.map((t, i) => {
+              const cleanStatus = (t.status || t.engine || '')
+                .replace('rejected_by_postgres', 'conflict_detected')
+                .replace('accepted_by_postgres', 'scheduled');
+              const cleanNote = (t.self_correction || t.title || '').replace(/GiST overlap/gi, 'schedule overlap');
+              return (
+                <div key={i} className={t.status === 'rejected_by_postgres' ? 'bg-block-pink p-1.5 rounded-xs' : 'p-1'}>
+                  <strong>[{t.step}]</strong> {cleanStatus} {cleanNote}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

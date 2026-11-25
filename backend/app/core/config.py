@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     mongo_db: str = "yatra_nosql"
     jwt_secret: str = "yatra-dev-jwt-secret-change-in-production"
     jwt_exp_hours: int = 24
+    dev_auth_bypass: bool = False
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     # OpenAI Integration (accepts OPEN_AI_API, OPENAI_API_KEY, openai_api_key)
     openai_api_key: str = Field(

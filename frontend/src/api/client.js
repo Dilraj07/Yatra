@@ -509,33 +509,66 @@ function _handleMockMutation(path, options) {
 
       return { ...newMsg, agent_message: agentMsg };
     } else if (path === '/api/expenses') {
-      if (body.test_unbalanced_ledger) {
-        const err = new Error('Ledger balance check failed: sum(amount_inr) != 0. Double-entry integrity enforced.');
-        err.pgDetail = { constraint: 'chk_expense_ledger_balanced', code: '23514' };
-        throw err;
-      }
       const expKey = `/api/expenses/trip/${body.trip_id || 1}`;
       const tripExp = MOCK_DATA[expKey] || { trip_id: body.trip_id || 1, total_spend: 0, expenses: [], balances: [], settlements: [] };
       const users = MOCK_DATA['/api/auth/users'] || [];
-      const payer = users.find((u) => u.user_id === Number(body.payer_id)) || { full_name: 'Traveler' };
+      const payerId = Number(body.payer_id);
+      const payer = users.find((u) => u.user_id === payerId) || { full_name: 'Traveler' };
       const amt = Number(body.amount);
+
+      let ledgerEntries = [];
+      if (body.rule === 'EXACT' && body.exact_shares) {
+        const deltas = { [payerId]: amt };
+        Object.entries(body.exact_shares).forEach(([uidStr, share]) => {
+          const uid = Number(uidStr);
+          deltas[uid] = (deltas[uid] || 0) - Number(share);
+        });
+        ledgerEntries = Object.entries(deltas).map(([uidStr, val], idx) => {
+          const uid = Number(uidStr);
+          const u = users.find((x) => x.user_id === uid);
+          return { entry_id: Date.now() + idx, user_id: uid, full_name: u?.full_name || `User ${uid}`, amount_inr: Math.round(val * 100) / 100 };
+        });
+      } else {
+        const memberIds = (tripExp.balances || []).map((b) => b.user_id);
+        const ids = memberIds.length ? memberIds : [1, 2, 3];
+        const per = Math.round((amt / ids.length) * 100) / 100;
+        ledgerEntries = ids.map((uid, idx) => {
+          const u = users.find((x) => x.user_id === uid);
+          const delta = (uid === payerId ? amt : 0) - per;
+          return { entry_id: Date.now() + idx, user_id: uid, full_name: u?.full_name || `User ${uid}`, amount_inr: Math.round(delta * 100) / 100 };
+        });
+      }
+
       const newExp = {
         expense_id: (tripExp.expenses.length || 0) + 10,
         description: body.description,
-        payer_id: Number(body.payer_id),
+        payer_id: payerId,
         payer_name: payer.full_name,
         amount: amt,
         currency: 'INR',
-        rule: 'EQUAL',
+        rule: body.rule || 'EQUAL',
         created_at: new Date().toISOString(),
-        ledger_entries: [
-          { entry_id: Date.now(), user_id: Number(body.payer_id), full_name: payer.full_name, amount_inr: (amt * 2) / 3 },
-          { entry_id: Date.now() + 1, user_id: 2, full_name: 'Arya Wadhwa', amount_inr: -amt / 3 },
-          { entry_id: Date.now() + 2, user_id: 3, full_name: 'Aarush Luthra', amount_inr: -amt / 3 },
-        ],
+        ledger_entries: ledgerEntries,
       };
       tripExp.expenses.unshift(newExp);
-      tripExp.total_spend += amt;
+      if (body.rule !== 'EXACT') tripExp.total_spend += amt;
+      ledgerEntries.forEach((le) => {
+        const b = (tripExp.balances || []).find((x) => x.user_id === le.user_id);
+        if (b) b.net_balance_inr = Math.round((Number(b.net_balance_inr) + le.amount_inr) * 100) / 100;
+      });
+      const debtors = (tripExp.balances || []).filter((b) => b.net_balance_inr < -0.01).map((b) => ({ ...b, amt: -b.net_balance_inr }));
+      const creditors = (tripExp.balances || []).filter((b) => b.net_balance_inr > 0.01).map((b) => ({ ...b, amt: b.net_balance_inr }));
+      const transfers = [];
+      let di = 0, ci = 0;
+      while (di < debtors.length && ci < creditors.length) {
+        const t = Math.round(Math.min(debtors[di].amt, creditors[ci].amt) * 100) / 100;
+        if (t > 0) transfers.push({ from_user_id: debtors[di].user_id, from_name: debtors[di].full_name, to_user_id: creditors[ci].user_id, to_name: creditors[ci].full_name, amount_inr: t });
+        debtors[di].amt = Math.round((debtors[di].amt - t) * 100) / 100;
+        creditors[ci].amt = Math.round((creditors[ci].amt - t) * 100) / 100;
+        if (debtors[di].amt <= 0.01) di++;
+        if (creditors[ci].amt <= 0.01) ci++;
+      }
+      tripExp.settlements = transfers;
       return { success: true, expense: newExp };
     } else if (path.startsWith('/api/voting/proposals/') && path.endsWith('/vote')) {
       const propId = Number(path.split('/')[4]);
@@ -735,5 +768,21 @@ function _handleMockMutation(path, options) {
   } catch (e) {
     if (e.message && e.message.includes('Ledger')) throw e;
   }
+}
+
+export async function settleSplitTransfer(tripId, settlement, paymentDetails) {
+  return apiRequest('/api/expenses', {
+    method: 'POST',
+    body: JSON.stringify({
+      trip_id: tripId,
+      payer_id: settlement.from_user_id,
+      description: `Settlement: ${settlement.from_name} -> ${settlement.to_name} (${paymentDetails.payment_id})`,
+      amount: Number(settlement.amount_inr),
+      currency: 'INR',
+      fx_to_inr: 1.0,
+      rule: 'EXACT',
+      exact_shares: { [settlement.to_user_id]: Number(settlement.amount_inr) },
+    }),
+  });
 }
 

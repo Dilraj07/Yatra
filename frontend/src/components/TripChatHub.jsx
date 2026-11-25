@@ -24,7 +24,7 @@ import {
   CreditCard,
   Radio,
 } from 'lucide-react';
-import { apiRequest } from '../api/client';
+import { apiRequest, settleSplitTransfer } from '../api/client';
 import { openRazorpayCheckout } from '../api/payment';
 import LatexText from './LatexText';
 
@@ -968,8 +968,13 @@ export default function TripChatHub({
                               title: `Split Settlement: ${s.from_name} to ${s.to_name}`,
                               description: `Trip #${activeTripId} Debt Clearance`,
                               customerName: s.from_name,
-                              onSuccess: (paymentDetails) => {
-                                notify('success', `Settlement ₹${Number(s.amount_inr).toLocaleString()} cleared (${paymentDetails.payment_id}). Ledger balance updated!`);
+                              onSuccess: async (paymentDetails) => {
+                                try {
+                                  await settleSplitTransfer(activeTripId, s, paymentDetails);
+                                  notify('success', `Settlement ₹${Number(s.amount_inr).toLocaleString()} cleared (${paymentDetails.payment_id}). Ledger balance updated!`);
+                                } catch (err) {
+                                  notify('error', err.message || 'Could not record settlement in ledger.');
+                                }
                                 if (onRefresh) onRefresh(activeTripId);
                               },
                               onFailure: (err) => {

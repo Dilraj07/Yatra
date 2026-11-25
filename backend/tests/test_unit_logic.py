@@ -1,5 +1,19 @@
+from fastapi import HTTPException
+import pytest
+
+from app.core.config import settings
 from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
 from app.services.expense_service import compute_settlements
+
+
+def test_dev_bypass_blocked_when_disabled(monkeypatch):
+    monkeypatch.setattr(settings, "dev_auth_bypass", False)
+    with pytest.raises(HTTPException) as exc:
+        decode_access_token("demo_token")
+    assert exc.value.status_code == 401
+    with pytest.raises(HTTPException) as exc_clerk:
+        decode_access_token("clerk_tok_fake123")
+    assert exc_clerk.value.status_code == 401
 
 
 def test_password_hashing_and_verification():

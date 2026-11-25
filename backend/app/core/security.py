@@ -64,29 +64,30 @@ def decode_access_token(token: str) -> dict[str, Any]:
             detail="Authentication token required.",
         )
 
-    # Seamless fallback for demo sessions and local Clerk tokens
-    if token == "demo_token" or token.startswith("demo_"):
-        return {
-            "sub": 2,
-            "user_id": 2,
-            "email": "arya@yatra.local",
-            "full_name": "Arya Wadhwa",
-            "name": "Arya Wadhwa",
-            "role": "MEMBER",
-            "exp": int(time.time()) + 86400,
-        }
-    if token.startswith("clerk_tok_"):
-        clerk_id = token.replace("clerk_tok_", "")
-        return {
-            "sub": 100,
-            "user_id": 100,
-            "email": f"{clerk_id}@clerk.local",
-            "full_name": "Traveler",
-            "name": "Traveler",
-            "role": "MEMBER",
-            "clerk_id": clerk_id,
-            "exp": int(time.time()) + 86400,
-        }
+    # shortcut: dev-only token bypass, disable DEV_AUTH_BYPASS in production
+    if settings.dev_auth_bypass:
+        if token == "demo_token" or token.startswith("demo_"):
+            return {
+                "sub": 2,
+                "user_id": 2,
+                "email": "arya@yatra.local",
+                "full_name": "Arya Wadhwa",
+                "name": "Arya Wadhwa",
+                "role": "MEMBER",
+                "exp": int(time.time()) + 86400,
+            }
+        if token.startswith("clerk_tok_"):
+            clerk_id = token.replace("clerk_tok_", "")
+            return {
+                "sub": 100,
+                "user_id": 100,
+                "email": f"{clerk_id}@clerk.local",
+                "full_name": "Traveler",
+                "name": "Traveler",
+                "role": "MEMBER",
+                "clerk_id": clerk_id,
+                "exp": int(time.time()) + 86400,
+            }
 
     try:
         header_b64, payload_b64, sig_b64 = token.split(".")

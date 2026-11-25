@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { ArrowRight, CreditCard } from 'lucide-react';
-import { apiRequest } from '../api/client';
+import { apiRequest, settleSplitTransfer } from '../api/client';
 import { openRazorpayCheckout } from '../api/payment';
 
 export default function ExpensesSection({ activeTripId, tripDetail, finances, onRefresh, notify }) {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState(2400);
   const [payerId, setPayerId] = useState('');
-  const [testUnbalanced, setTestUnbalanced] = useState(false);
 
   async function handleAdd(e) {
     e.preventDefault();
@@ -24,7 +23,6 @@ export default function ExpensesSection({ activeTripId, tripDetail, finances, on
           currency: 'INR',
           fx_to_inr: 1.0,
           rule: 'EQUAL',
-          test_unbalanced_ledger: testUnbalanced,
         }),
       });
       setDescription('');
@@ -69,8 +67,13 @@ export default function ExpensesSection({ activeTripId, tripDetail, finances, on
                         title: `Debt Clearance: ${s.from_name} to ${s.to_name}`,
                         description: `Trip #${activeTripId} Balanced Settlement`,
                         customerName: s.from_name,
-                        onSuccess: (paymentDetails) => {
-                          notify('success', `Settlement INR ${Number(s.amount_inr).toLocaleString()} settled (${paymentDetails.payment_id}).`);
+                        onSuccess: async (paymentDetails) => {
+                          try {
+                            await settleSplitTransfer(activeTripId, s, paymentDetails);
+                            notify('success', `Settlement INR ${Number(s.amount_inr).toLocaleString()} cleared (${paymentDetails.payment_id}).`);
+                          } catch (err) {
+                            notify('error', err.message, err.pgDetail);
+                          }
                           if (onRefresh) onRefresh(activeTripId);
                         },
                         onFailure: (err) => {
