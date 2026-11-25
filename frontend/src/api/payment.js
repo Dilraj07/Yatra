@@ -16,62 +16,20 @@ export function openRazorpayCheckout({
   customerName = 'Arya Wadhwa',
   customerEmail = 'arya@yatra.local',
   customerPhone = '+919876543210',
+  initialMethod = 'select', // 'select' | 'gpay' | 'hdfc' | 'card'
   onSuccess,
   onFailure,
   onDismiss,
 }) {
-  // If user explicitly configured their own active Razorpay Key ID in .env
-  const customRzpKey = typeof window !== 'undefined' && (import.meta.env.VITE_RAZORPAY_KEY_ID || localStorage.getItem('yatra_rzp_key'));
-
-  if (customRzpKey && typeof window !== 'undefined' && window.Razorpay) {
-    try {
-      const options = {
-        key: customRzpKey,
-        amount: Math.round(Number(amountInr) * 100),
-        currency: 'INR',
-        name: 'Yatra · Travel Platform',
-        description: description || title,
-        handler: function (response) {
-          if (onSuccess) {
-            onSuccess({
-              payment_id: response.razorpay_payment_id || `pay_${Date.now()}`,
-              order_id: response.razorpay_order_id || `order_${Date.now()}`,
-              signature: response.razorpay_signature || 'test_sig',
-              amount_inr: amountInr,
-              method: 'Razorpay Hosted',
-            });
-          }
-        },
-        prefill: {
-          name: customerName,
-          email: customerEmail,
-          contact: customerPhone,
-        },
-        theme: { color: '#0f172a' },
-        modal: {
-          ondismiss: function () {
-            if (onDismiss) onDismiss();
-          },
-        },
-      };
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', function (resp) {
-        if (onFailure) onFailure(resp.error || { description: 'Payment declined.' });
-      });
-      rzp.open();
-      return;
-    } catch (err) {
-      console.warn('Custom Razorpay key error, opening standard gateway portal:', err);
-    }
-  }
-
-  // Open the interactive Yatra Gateway with GPay and HDFC Bank Netbanking portals
+  // Launch the primary Yatra Payment Gateway with direct GPay, HDFC Bank, PhonePe, and Card portals
   launchPaymentGatewayPortal({
     amountInr,
     title,
     description,
     customerName,
     customerEmail,
+    customerPhone,
+    initialMethod,
     onSuccess,
     onFailure,
     onDismiss,
@@ -84,6 +42,8 @@ function launchPaymentGatewayPortal({
   description,
   customerName,
   customerEmail,
+  customerPhone = '+919876543210',
+  initialMethod = 'select',
   onSuccess,
   onFailure,
   onDismiss,
@@ -101,7 +61,10 @@ function launchPaymentGatewayPortal({
   overlay.id = 'yatra-payment-modal';
   overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 overflow-y-auto animate-in fade-in duration-150';
 
-  let currentView = 'select'; // 'select' | 'gpay' | 'hdfc' | 'card'
+  let currentView = initialMethod || 'select'; // 'select' | 'gpay' | 'hdfc' | 'card' | 'rzp_hosted'
+  let rzpNotice = '';
+
+  const customRzpKey = typeof window !== 'undefined' && (import.meta.env.VITE_RAZORPAY_KEY_ID || localStorage.getItem('yatra_rzp_key'));
 
   function renderView() {
     overlay.innerHTML = `
@@ -239,12 +202,40 @@ function launchPaymentGatewayPortal({
             </div>
           </div>
 
+          <!-- Section: Razorpay Hosted Modal -->
+          <div class="pt-2 border-t border-slate-100">
+            <div id="btn-open-rzp-hosted" class="p-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-sky-500 transition-all cursor-pointer flex items-center justify-between group">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-lg bg-sky-700 text-white font-bold flex items-center justify-center text-[10px] font-mono shadow-2xs">
+                  RZP
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-slate-900 group-hover:text-sky-700">Razorpay Hosted Popup</div>
+                  <div class="text-[10px] text-slate-500 font-mono">External Checkout Window (Test / Sandbox)</div>
+                </div>
+              </div>
+              <span class="text-[11px] font-semibold text-sky-800 bg-sky-50 px-2 py-0.5 rounded-full font-mono">Launch</span>
+            </div>
+          </div>
+
+          ${rzpNotice ? `
+            <div class="p-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 text-xs space-y-1">
+              <div class="font-bold text-amber-900 flex items-center gap-1.5">
+                <span>GATEWAY GUIDANCE</span>
+              </div>
+              <p class="text-[11px] text-amber-800 leading-relaxed">${rzpNotice}</p>
+            </div>
+          ` : ''}
+
           <!-- Testing and Failure Simulation Controls -->
           <div class="pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
             <button id="btn-simulate-fail" class="text-rose-600 hover:text-rose-800 hover:underline text-xs font-mono font-medium">
               Simulate Bank Decline (Test Failure Rollback)
             </button>
-            <span class="text-[10px] text-slate-400 font-mono">Yatra Transaction Engine</span>
+            <div class="flex items-center gap-2">
+              ${customRzpKey ? `<button id="btn-clear-rzp-key" class="text-slate-400 hover:text-rose-600 underline text-[10px] font-mono">Reset Key</button>` : ''}
+              <span class="text-[10px] text-slate-400 font-mono">Yatra Transaction Engine</span>
+            </div>
           </div>
         </div>
       `;
@@ -453,6 +444,51 @@ function launchPaymentGatewayPortal({
       };
     }
 
+    const rzpBtn = overlay.querySelector('#btn-open-rzp-hosted');
+    if (rzpBtn) {
+      rzpBtn.onclick = () => {
+        const activeKey = customRzpKey || 'rzp_test_5173DemoMockKey';
+        if (typeof window !== 'undefined' && window.Razorpay) {
+          try {
+            const options = {
+              key: activeKey,
+              amount: Math.round(Number(amountInr) * 100),
+              currency: 'INR',
+              name: 'Yatra · Travel Platform',
+              description: description || title,
+              handler: function (response) {
+                completePayment('Razorpay Hosted', 'pay_rzp_');
+              },
+              prefill: {
+                name: customerName,
+                email: customerEmail,
+                contact: customerPhone,
+              },
+              theme: { color: '#0f172a' },
+              modal: {
+                ondismiss: function () {
+                  rzpNotice = 'Razorpay popup was closed. If your Razorpay test sandbox reported "No appropriate payment method found", please select Google Pay or HDFC Bank NetBanking above for instant verified payment.';
+                  renderView();
+                },
+              },
+            };
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (resp) {
+              rzpNotice = `Razorpay reported: ${resp.error?.description || 'Payment declined'}. You can use Google Pay or HDFC NetBanking directly above.`;
+              renderView();
+            });
+            rzp.open();
+          } catch (err) {
+            rzpNotice = `Could not launch Razorpay popup (${err.message}). Please use Google Pay or HDFC Bank directly.`;
+            renderView();
+          }
+        } else {
+          rzpNotice = 'Razorpay checkout script not available. Please use Google Pay or HDFC Bank NetBanking directly above for instant sandbox verification.';
+          renderView();
+        }
+      };
+    }
+
     // Direct Instant UPI options
     const phonepeBtn = overlay.querySelector('#btn-open-phonepe');
     if (phonepeBtn) {
@@ -465,6 +501,63 @@ function launchPaymentGatewayPortal({
     if (iciciBtn) {
       iciciBtn.onclick = () => {
         completePayment('ICICI Bank NetBanking', 'pay_icici_');
+      };
+    }
+
+    // Razorpay Hosted Launch
+    const rzpHewBtn = overlay.querySelector('#btn-open-rzp-hosted');
+    if (rzpHewBtn) {
+      rzpHewBtn.onclick = () => {
+        if (customRzpKey && typeof window !== 'undefined' && window.Razorpay) {
+          try {
+            const options = {
+              key: customRzpKey,
+              amount: Math.round(Number(amountInr) * 100),
+              currency: 'INR',
+              name: 'Yatra · Travel Platform',
+              description: description || title,
+              handler: function (response) {
+                completePayment('Razorpay Hosted', 'pay_rzp_');
+              },
+              prefill: {
+                name: customerName,
+                email: customerEmail,
+                contact: customerPhone,
+              },
+              theme: { color: '#0f172a' },
+              modal: {
+                ondismiss: function () {
+                  rzpNotice = 'Razorpay popup closed. If your Razorpay test sandbox reported "No appropriate payment method found", please select Google Pay or HDFC Bank NetBanking above for instant verified payment.';
+                  renderView();
+                },
+              },
+            };
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', function (resp) {
+              rzpNotice = `Razorpay reported: ${resp.error?.description || 'Payment declined'}. Please select Google Pay or HDFC NetBanking above to proceed.`;
+              renderView();
+            });
+            rzp.open();
+          } catch (err) {
+            rzpNotice = `Could not launch Razorpay popup (${err.message}). Please use Google Pay or HDFC Bank directly.`;
+            renderView();
+          }
+        } else {
+          rzpNotice = 'No Razorpay Key ID detected. Please select Google Pay or HDFC Bank NetBanking directly above for instant sandbox verification.';
+          renderView();
+        }
+      };
+    }
+
+    // Clear custom key button
+    const clearKeyBtn = overlay.querySelector('#btn-clear-rzp-key');
+    if (clearKeyBtn) {
+      clearKeyBtn.onclick = () => {
+        try {
+          localStorage.removeItem('yatra_rzp_key');
+        } catch {}
+        rzpNotice = 'Custom Razorpay test key removed from local storage. Direct Google Pay and HDFC Bank NetBanking portals are ready.';
+        renderView();
       };
     }
 

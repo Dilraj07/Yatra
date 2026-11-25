@@ -19,16 +19,16 @@ export default function ConstraintBanner({ feedback, onClose }) {
         )}
         <div className="flex-1 space-y-1">
           <div className="flex items-center justify-between gap-4">
-            <span className="caption-mono">
-              {isError ? feedback.pgDetail?.enforced_by || 'DATABASE REJECTION' : 'SUCCESS'}
+            <span className="caption-mono font-bold">
+              {isError ? 'VALIDATION NOTICE' : 'SUCCESS'}
             </span>
             <button onClick={onClose} aria-label="Close" className="p-1 rounded-full hover:bg-surface-soft">
               <X className="w-4 h-4" />
             </button>
           </div>
-          {feedback.pgDetail?.sqlstate && (
-            <span className="caption-mono inline-block bg-primary text-white px-2 py-0.5 rounded-xs">
-              SQLSTATE {feedback.pgDetail.sqlstate} · {feedback.pgDetail.error_code}
+          {feedback.pgDetail?.error_code && (
+            <span className="caption-mono inline-block bg-black text-white px-2 py-0.5 rounded-xs text-[10px]">
+              REF: {feedback.pgDetail.error_code}
             </span>
           )}
           <p className="text-sm leading-snug">{feedback.message}</p>

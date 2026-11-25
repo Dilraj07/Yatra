@@ -161,13 +161,19 @@ export default function AuthModal({ open, onClose, onAuthSuccess, hasClerk = tru
                       formFieldInput:
                         'field-input text-xs py-2 w-full',
                       footer:
-                        'bg-transparent border-0 pt-2 p-0',
+                        'bg-transparent border-0 pt-3 pb-6 px-0',
                       footerAction:
                         'text-xs text-black/60',
                       footerActionLink:
                         'text-sky-600 hover:text-sky-700 font-semibold text-xs',
+                      footerPages:
+                        'hidden',
                       dividerRow: 'my-3 text-black/40',
                       formFieldLabel: 'text-[11px] font-mono uppercase tracking-wider text-black/70 mb-1',
+                    },
+                    layout: {
+                      logoPlacement: 'none',
+                      showOptionalFields: false,
                     },
                   }}
                 />

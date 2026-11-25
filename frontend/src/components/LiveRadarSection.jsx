@@ -95,12 +95,38 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
         if (notify) {
           notify(
             'success',
-            `Confirmed! Room booked at ${hotel.name}. Payment ID: ${paymentResp.razorpay_payment_id}`
+            `Confirmed! Room booked at ${hotel.name}. Payment ID: ${paymentResp.payment_id}`
           );
         }
       },
       onFailure: (err) => {
-        if (notify) notify('error', err.message);
+        if (notify) notify('error', err.description || err.message);
+      },
+    });
+  }
+
+  async function handleBookFlight(flight) {
+    const flightCost = 3400;
+    openRazorpayCheckout({
+      amountInr: flightCost,
+      title: `${flight.airline} (${flight.callsign}) Air Seat`,
+      description: `Commercial Air Seat to ${selectedCity?.toUpperCase() || 'Destination'}`,
+      notes: {
+        callsign: flight.callsign,
+        airline: flight.airline,
+        trip_id: String(activeTripId || 1),
+        source: 'Airspace Live Radar',
+      },
+      onSuccess: (paymentResp) => {
+        if (notify) {
+          notify(
+            'success',
+            `Confirmed! Air seat reserved on ${flight.airline} (${flight.callsign}). Payment ID: ${paymentResp.payment_id}`
+          );
+        }
+      },
+      onFailure: (err) => {
+        if (notify) notify('error', err.description || err.message || 'Payment declined');
       },
     });
   }
@@ -274,9 +300,19 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] block text-black/40">SOURCE</span>
-                    <span className="text-emerald-700 font-bold">Live Flight Feed</span>
+                    <span className="text-[10px] block text-black/40">FARE ESTIMATE</span>
+                    <span className="font-bold text-black">₹3,400</span>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-hairline">
+                  <span className="text-[10px] font-mono text-emerald-700 font-semibold">Active Transponder Signal</span>
+                  <button
+                    onClick={() => handleBookFlight(flight)}
+                    className="btn-success py-1 px-3.5 rounded-pill text-xs flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer font-semibold"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" /> Book Air Seat
+                  </button>
                 </div>
               </div>
             ))}

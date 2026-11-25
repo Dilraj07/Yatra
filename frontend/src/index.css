@@ -91,9 +91,12 @@
   }
 }
 
-/* Scoped Clerk Integration - Seamless Modal Design (No nested card, no shadow collision) */
+/* Scoped Clerk Integration - Seamless Modal Design (No nested card, no shadow collision, no overlapping dev badge) */
 .clerk-container .cl-cardBox,
-.clerk-container .cl-card {
+.clerk-container .cl-card,
+.clerk-container [class*="cardBox"],
+.clerk-container [class*="card"],
+.clerk-container .cl-signIn-root {
   box-shadow: none !important;
   border: none !important;
   background-color: transparent !important;
@@ -121,8 +124,19 @@
   background: transparent !important;
   border: none !important;
   padding-top: 0.75rem !important;
-  padding-bottom: 0 !important;
+  padding-bottom: 1.5rem !important;
   margin: 0 !important;
+  position: relative !important;
+}
+
+.clerk-container .cl-developmentModeBadge,
+.clerk-container [data-localization-key*="developmentMode"],
+.clerk-container [class*="developmentMode"] {
+  position: static !important;
+  display: block !important;
+  margin: 0.75rem auto 0 auto !important;
+  text-align: center !important;
+  transform: none !important;
 }
 
 .clerk-container .cl-socialButtonsBlockButton {

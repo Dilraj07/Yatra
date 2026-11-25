@@ -58,6 +58,13 @@ export default function TripChatHub({
   const [newMemberBudget, setNewMemberBudget] = useState(25000);
   const [memberActionLoading, setMemberActionLoading] = useState(false);
 
+  // Quick expense modal states
+  const [addExpenseOpen, setAddExpenseOpen] = useState(false);
+  const [expDesc, setExpDesc] = useState('');
+  const [expAmount, setExpAmount] = useState(1500);
+  const [expPayerId, setExpPayerId] = useState('');
+  const [expLoading, setExpLoading] = useState(false);
+
   // Load chat messages when trip changes
   const loadMessages = async () => {
     if (!activeTripId) return;
@@ -247,6 +254,37 @@ export default function TripChatHub({
       notify('error', `AI Analysis failed: ${err.message}`);
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  // Add Shared Group Expense
+  const handleAddExpense = async (e) => {
+    if (e) e.preventDefault();
+    if (!activeTripId || !expDesc.trim() || !expAmount) return;
+    const pid = Number(expPayerId || currentUser?.user_id || tripDetail?.members?.[0]?.user_id || 1);
+    setExpLoading(true);
+    try {
+      await apiRequest('/api/expenses', {
+        method: 'POST',
+        body: JSON.stringify({
+          trip_id: activeTripId,
+          payer_id: pid,
+          description: expDesc.trim(),
+          amount: Number(expAmount),
+          currency: 'INR',
+          fx_to_inr: 1.0,
+          rule: 'EQUAL',
+          test_unbalanced_ledger: false,
+        }),
+      });
+      notify('success', `Recorded shared expense: ${expDesc} (₹${Number(expAmount).toLocaleString()})`);
+      setAddExpenseOpen(false);
+      setExpDesc('');
+      if (onRefresh) onRefresh(activeTripId);
+    } catch (err) {
+      notify('error', err.message);
+    } finally {
+      setExpLoading(false);
     }
   };
 
@@ -764,6 +802,49 @@ export default function TripChatHub({
                   </button>
                 </div>
               )}
+
+              {/* Logged Group Expenses */}
+              {finances?.expenses?.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-hairline">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-black/40 block">
+                      Recorded Group Expenses ({finances.expenses.length})
+                    </span>
+                    <button
+                      onClick={() => setAddExpenseOpen(true)}
+                      className="text-[11px] font-bold text-sky-700 hover:text-sky-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Add Expense
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {finances.expenses.map((exp) => (
+                      <div
+                        key={exp.expense_id}
+                        className="rounded-xl bg-surface-soft p-2.5 border border-hairline flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <span className="font-semibold text-black block">{exp.description}</span>
+                          <span className="text-[10px] text-black/50 font-mono">Paid by {exp.payer_name} · Equal Split</span>
+                        </div>
+                        <span className="font-mono font-bold text-black">₹{Number(exp.amount).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Add Expense Action if no expenses yet */}
+              {(!finances?.expenses || finances.expenses.length === 0) && (
+                <div className="pt-2 border-t border-hairline">
+                  <button
+                    onClick={() => setAddExpenseOpen(true)}
+                    className="btn-secondary w-full text-xs py-2 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Record Group Expense
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -905,6 +986,49 @@ export default function TripChatHub({
                   ))}
                 </div>
               )}
+
+              {/* Logged Group Expenses */}
+              {finances?.expenses?.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-hairline">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-black/40 block">
+                      Recorded Group Expenses ({finances.expenses.length})
+                    </span>
+                    <button
+                      onClick={() => setAddExpenseOpen(true)}
+                      className="text-[11px] font-bold text-sky-700 hover:text-sky-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Add Expense
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {finances.expenses.map((exp) => (
+                      <div
+                        key={exp.expense_id}
+                        className="rounded-xl bg-surface-soft p-2.5 border border-hairline flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <span className="font-semibold text-black block">{exp.description}</span>
+                          <span className="text-[10px] text-black/50 font-mono">Paid by {exp.payer_name} · Equal Split</span>
+                        </div>
+                        <span className="font-mono font-bold text-black">₹{Number(exp.amount).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Add Expense Action if no expenses yet */}
+              {(!finances?.expenses || finances.expenses.length === 0) && (
+                <div className="pt-2 border-t border-hairline">
+                  <button
+                    onClick={() => setAddExpenseOpen(true)}
+                    className="btn-secondary w-full text-xs py-2 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Record Group Expense
+                  </button>
+                </div>
+              )}
             </div>
           )}
           </div>
@@ -1028,6 +1152,95 @@ export default function TripChatHub({
                   className="btn-primary flex-1 text-xs py-2 font-semibold"
                 >
                   {memberActionLoading ? 'Adding...' : 'Add Traveler'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Expense Modal */}
+      {addExpenseOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl border border-hairline shadow-2xl p-6 relative">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-hairline">
+              <div>
+                <span className="eyebrow-mono text-black/50 block">GROUP EXPENSE MANAGEMENT</span>
+                <h3 className="text-base font-bold text-black tracking-tight mt-0.5">
+                  Record Group Expense
+                </h3>
+              </div>
+              <button
+                onClick={() => setAddExpenseOpen(false)}
+                className="w-8 h-8 rounded-full bg-surface-soft hover:bg-hairline flex items-center justify-center text-black/60 hover:text-black transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddExpense} className="space-y-4">
+              <div>
+                <label className="caption-mono block mb-1">Expense Description</label>
+                <input
+                  type="text"
+                  required
+                  value={expDesc}
+                  onChange={(e) => setExpDesc(e.target.value)}
+                  placeholder="e.g. Palolem Seafood Dinner, Taxi to Hampi, Entry Passes"
+                  className="field-input text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="caption-mono block mb-1">Amount (INR)</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    step="0.01"
+                    value={expAmount}
+                    onChange={(e) => setExpAmount(e.target.value)}
+                    className="field-input text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="caption-mono block mb-1">Paid By</label>
+                  <select
+                    value={expPayerId || currentUser?.user_id || tripDetail?.members?.[0]?.user_id || ''}
+                    onChange={(e) => setExpPayerId(e.target.value)}
+                    className="field-input text-xs"
+                  >
+                    {(tripDetail?.members || []).map((m) => (
+                      <option key={m.user_id} value={m.user_id}>
+                        {m.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-black/60 bg-surface-soft p-3 rounded-xl border border-hairline font-mono space-y-1">
+                <div className="font-bold text-black">Balanced Ledger Policy:</div>
+                <div>
+                  Amount divided equally across {memberCount} active travelers (₹{(Number(expAmount || 0) / Math.max(1, memberCount)).toFixed(2)}/person).
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-hairline">
+                <button
+                  type="button"
+                  onClick={() => setAddExpenseOpen(false)}
+                  className="btn-secondary flex-1 text-xs py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={expLoading || !expDesc.trim() || !expAmount}
+                  className="btn-primary flex-1 text-xs py-2 font-semibold"
+                >
+                  {expLoading ? 'Recording...' : 'Post Expense'}
                 </button>
               </div>
             </form>

@@ -96,10 +96,9 @@ export default function ExpensesSection({ activeTripId, tripDetail, finances, on
             <select className="field-input" value={payerId || tripDetail?.members?.[0]?.user_id || ''} onChange={(e) => setPayerId(e.target.value)}>
               {(tripDetail?.members || []).map((m) => <option key={m.user_id} value={m.user_id}>Paid by {m.full_name}</option>)}
             </select>
-            <label className="flex items-start gap-2 text-xs p-2.5 rounded-md bg-surface-soft cursor-pointer">
-              <input type="checkbox" checked={testUnbalanced} onChange={(e) => setTestUnbalanced(e.target.checked)} className="mt-0.5 accent-black" />
-              <span>Test unbalanced ledger protection</span>
-            </label>
+            <div className="text-[11px] text-black/50 bg-surface-soft p-2.5 rounded-md font-mono">
+              Split Policy: Automatically split equally across all active group members with balanced ledger integrity.
+            </div>
             <button type="submit" className="btn-primary w-full">Post Expense</button>
           </form>
         </div>

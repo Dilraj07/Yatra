@@ -4,7 +4,7 @@ import { apiRequest } from '../api/client';
 
 export default function PlannerSection({ activeTripId, tripDetail, itineraries, slots, onRefresh, notify }) {
   const [prompt, setPrompt] = useState('Plan a 3-day Goa & Hampi trip with Virupaksha heritage viewing under 25000 INR');
-  const [injectOverlap, setInjectOverlap] = useState(true);
+  const [injectOverlap, setInjectOverlap] = useState(false);
   const [aiTrace, setAiTrace] = useState(null);
   const [loading, setLoading] = useState(false);
 
