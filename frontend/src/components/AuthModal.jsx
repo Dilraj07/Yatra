@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { X, Check } from 'lucide-react';
+import { X } from 'lucide-react';
 import { SignIn, useUser, useClerk } from '@clerk/react';
 import { apiRequest, setAuthSession } from '../api/client';
 
 export default function AuthModal({ open, onClose, onAuthSuccess, hasClerk = true }) {
-  const [activeTab, setActiveTab] = useState('clerk'); // 'clerk' | 'demo'
+  const [activeTab, setActiveTab] = useState(hasClerk ? 'clerk' : 'demo'); // 'clerk' | 'demo'
 
   // Demo account states
   const [demoMode, setDemoMode] = useState('login');
@@ -64,12 +64,9 @@ export default function AuthModal({ open, onClose, onAuthSuccess, hasClerk = tru
       <div className="w-full max-w-md bg-white rounded-2xl border border-hairline shadow-2xl p-6 sm:p-7 relative my-8 max-h-[90vh] overflow-y-auto no-scrollbar">
         {/* Modal Header */}
         <div className="flex items-center justify-between mb-5 pb-3 border-b border-hairline">
-          <div>
-            <span className="eyebrow-mono text-black/50 block">AUTHENTICATION PORTAL</span>
-            <h2 className="text-lg font-bold text-black tracking-tight mt-0.5">
-              Access Yatra Workspace
-            </h2>
-          </div>
+          <h2 className="text-lg font-bold text-black tracking-tight">
+            Sign in to Yatra
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-surface-soft hover:bg-hairline flex items-center justify-center transition-colors text-black/60 hover:text-black"
@@ -78,34 +75,36 @@ export default function AuthModal({ open, onClose, onAuthSuccess, hasClerk = tru
           </button>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="grid grid-cols-2 gap-1.5 p-1 bg-surface-soft rounded-pill mb-6 border border-hairline">
-          <button
-            type="button"
-            onClick={() => setActiveTab('clerk')}
-            className={`py-2 text-xs font-semibold rounded-pill transition-all ${
-              activeTab === 'clerk'
-                ? 'bg-white text-black shadow-xs font-bold'
-                : 'text-black/60 hover:text-black'
-            }`}
-          >
-            Clerk Authentication
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('demo')}
-            className={`py-2 text-xs font-semibold rounded-pill transition-all ${
-              activeTab === 'demo'
-                ? 'bg-white text-black shadow-xs font-bold'
-                : 'text-black/60 hover:text-black'
-            }`}
-          >
-            Demo Accounts
-          </button>
-        </div>
+        {/* Tab Switcher (only shown when Clerk is configured) */}
+        {hasClerk && (
+          <div className="grid grid-cols-2 gap-1.5 p-1 bg-surface-soft rounded-pill mb-6 border border-hairline">
+            <button
+              type="button"
+              onClick={() => setActiveTab('clerk')}
+              className={`py-2 text-xs font-semibold rounded-pill transition-all ${
+                activeTab === 'clerk'
+                  ? 'bg-white text-black shadow-xs font-bold'
+                  : 'text-black/60 hover:text-black'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('demo')}
+              className={`py-2 text-xs font-semibold rounded-pill transition-all ${
+                activeTab === 'demo'
+                  ? 'bg-white text-black shadow-xs font-bold'
+                  : 'text-black/60 hover:text-black'
+              }`}
+            >
+              Quick Accounts
+            </button>
+          </div>
+        )}
 
         {/* TAB 1: Clerk Authentication */}
-        {activeTab === 'clerk' && (
+        {hasClerk && activeTab === 'clerk' && (
           <div className="space-y-4">
             {clerkSignedIn && clerkUser ? (
               <div className="p-5 rounded-xl border border-hairline bg-surface-soft text-center space-y-3">
@@ -121,9 +120,6 @@ export default function AuthModal({ open, onClose, onAuthSuccess, hasClerk = tru
                 <div>
                   <h3 className="text-sm font-bold text-black">{clerkUser.fullName || clerkUser.username || 'Traveler'}</h3>
                   <p className="text-xs text-black/60">{clerkUser.primaryEmailAddress?.emailAddress}</p>
-                </div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium">
-                  <Check className="w-3 h-3 text-emerald-600" /> Clerk Session Active
                 </div>
                 <div className="flex gap-2 pt-2">
                   <button
@@ -195,17 +191,17 @@ export default function AuthModal({ open, onClose, onAuthSuccess, hasClerk = tru
         )}
 
         {/* TAB 2: Demo & Local Accounts */}
-        {activeTab === 'demo' && (
+        {(!hasClerk || activeTab === 'demo') && (
           <div className="space-y-5">
             {/* 1-Click Fast Logins */}
             <div>
-              <span className="caption-mono block mb-2 text-black/60">ONE-CLICK DEMO ACCESS</span>
+              <span className="caption-mono block mb-2 text-black/60">QUICK SIGN IN</span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {[
-                  { name: 'Dilraj Singh', role: 'Trip Organizer', email: 'dilraj@yatra.local' },
-                  { name: 'Arya Wadhwa', role: 'Trip Member', email: 'arya@yatra.local' },
-                  { name: 'Aarush Luthra', role: 'Trip Member', email: 'aarush@yatra.local' },
-                  { name: 'Archaeological Survey', role: 'Heritage Operator', email: 'operator@asi.gov.in' },
+                  { name: 'Dilraj Singh', role: 'Organizer', email: 'dilraj@yatra.local' },
+                  { name: 'Arya Wadhwa', role: 'Traveler', email: 'arya@yatra.local' },
+                  { name: 'Aarush Luthra', role: 'Traveler', email: 'aarush@yatra.local' },
+                  { name: 'ASI Tickets', role: 'Ticket Desk', email: 'operator@asi.gov.in' },
                 ].map((acc) => (
                   <button
                     key={acc.email}
@@ -234,7 +230,7 @@ export default function AuthModal({ open, onClose, onAuthSuccess, hasClerk = tru
             <div className="pt-3 border-t border-hairline space-y-3">
               <div className="flex items-center justify-between">
                 <span className="caption-mono text-black/60">
-                  {demoMode === 'login' ? 'OR SIGN IN MANUALLY' : 'REGISTER NEW DEMO ACCOUNT'}
+                  {demoMode === 'login' ? 'SIGN IN WITH EMAIL' : 'CREATE ACCOUNT'}
                 </span>
                 <button
                   type="button"

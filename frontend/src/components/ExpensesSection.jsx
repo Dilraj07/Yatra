@@ -36,8 +36,8 @@ export default function ExpensesSection({ activeTripId, tripDetail, finances, on
   return (
     <div className="color-block bg-block-mint space-y-6">
       <div>
-        <span className="eyebrow-mono">FAIR GROUP EXPENSES & BALANCED LEDGER</span>
-        <h2 className="display-lg mt-1">Split costs fairly with automated math.</h2>
+        <h2 className="display-lg">Expenses & Split</h2>
+        <p className="text-xs text-ink/70 mt-1">Track group spending and settle what you owe.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -47,37 +47,37 @@ export default function ExpensesSection({ activeTripId, tripDetail, finances, on
               <div key={b.user_id} className="rounded-md bg-surface-soft p-3.5 border border-hairline-soft">
                 <div className="text-sm font-medium">{b.full_name}</div>
                 <div className="text-lg font-bold font-mono mt-0.5">
-                  {Number(b.net_balance_inr) >= 0 ? '+' : ''}INR {Number(b.net_balance_inr).toLocaleString()}
+                  {Number(b.net_balance_inr) >= 0 ? '+' : ''}₹{Number(b.net_balance_inr).toLocaleString()}
                 </div>
               </div>
             ))}
           </div>
 
           <div className="space-y-2 pt-3 border-t border-hairline-soft">
-            <span className="caption-mono block">WHO OWES WHOM</span>
+            <span className="caption-mono block">SETTLE UP</span>
             {(finances?.settlements || []).map((s, idx) => (
               <div key={idx} className="flex items-center justify-between rounded-md bg-surface-soft px-4 py-2.5 text-sm">
                 <span className="flex items-center gap-2 font-medium">{s.from_name} <ArrowRight className="w-4 h-4" /> {s.to_name}</span>
                 <div className="flex items-center gap-3">
-                  <span className="font-mono font-bold">INR {Number(s.amount_inr).toLocaleString()}</span>
+                  <span className="font-mono font-bold">₹{Number(s.amount_inr).toLocaleString()}</span>
                   <button
                     onClick={() => {
                       openRazorpayCheckout({
                         amountInr: Number(s.amount_inr),
-                        title: `Debt Clearance: ${s.from_name} to ${s.to_name}`,
-                        description: `Trip #${activeTripId} Balanced Settlement`,
+                        title: `Settle: ${s.from_name} to ${s.to_name}`,
+                        description: 'Group expense settlement',
                         customerName: s.from_name,
                         onSuccess: async (paymentDetails) => {
                           try {
                             await settleSplitTransfer(activeTripId, s, paymentDetails);
-                            notify('success', `Settlement INR ${Number(s.amount_inr).toLocaleString()} cleared (${paymentDetails.payment_id}).`);
+                            notify('success', `Settled ₹${Number(s.amount_inr).toLocaleString()} (${paymentDetails.payment_id}).`);
                           } catch (err) {
                             notify('error', err.message, err.pgDetail);
                           }
                           if (onRefresh) onRefresh(activeTripId);
                         },
                         onFailure: (err) => {
-                          notify('error', `Settlement payment declined: ${err.description || 'Simulated error'}`);
+                          notify('error', `Payment declined: ${err.description || 'Failed'}`);
                         },
                       });
                     }}
@@ -100,9 +100,9 @@ export default function ExpensesSection({ activeTripId, tripDetail, finances, on
               {(tripDetail?.members || []).map((m) => <option key={m.user_id} value={m.user_id}>Paid by {m.full_name}</option>)}
             </select>
             <div className="text-[11px] text-black/50 bg-surface-soft p-2.5 rounded-md font-mono">
-              Split Policy: Automatically split equally across all active group members with balanced ledger integrity.
+              Split equally among all trip members.
             </div>
-            <button type="submit" className="btn-primary w-full">Post Expense</button>
+            <button type="submit" className="btn-primary w-full">Add Expense</button>
           </form>
         </div>
       </div>

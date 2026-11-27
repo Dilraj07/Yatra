@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     )
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash"
     duffel_api_key: str = ""
     liteapi_key: str = ""
     razorpay_key_id: str = ""

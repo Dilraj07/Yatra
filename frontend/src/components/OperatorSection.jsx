@@ -1,15 +1,9 @@
 import React, { useState } from 'react';
-import { Lock, PlusCircle, CreditCard, CheckCircle2 } from 'lucide-react';
+import { Lock, CreditCard, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { openRazorpayCheckout } from '../api/payment';
 
-export default function OperatorSection({ pois, slots, holds, onRefresh, notify }) {
-  const [poiId, setPoiId] = useState('');
-  const [circuit, setCircuit] = useState('Batch 5 (22:30 - 23:00)');
-  const [windowStart, setWindowStart] = useState('2026-12-18T22:30');
-  const [windowEnd, setWindowEnd] = useState('2026-12-18T23:00');
-  const [capacity, setCapacity] = useState(50);
-  const [priceInr, setPriceInr] = useState(750);
+export default function OperatorSection({ slots, holds, onRefresh, notify }) {
   const [holdSeatsMap, setHoldSeatsMap] = useState({});
   const [lastPayment, setLastPayment] = useState(null);
 
@@ -21,58 +15,33 @@ export default function OperatorSection({ pois, slots, holds, onRefresh, notify 
     openRazorpayCheckout({
       amountInr: totalAmount,
       title: `${slot.poi_name} — Timed Entry`,
-      description: `${slot.circuit} · ${seats} seats @ ₹${unitPrice.toLocaleString()}`,
+      description: `${slot.circuit} · ${seats} tickets @ ₹${unitPrice.toLocaleString()}`,
       onSuccess: async (paymentDetails) => {
         setLastPayment(paymentDetails);
         try {
-          // Perform hold and state synchronization in DB
           await apiRequest('/api/inventory/holds', {
             method: 'POST',
             body: JSON.stringify({ slot_id: slot.slot_id, seats }),
           });
           notify(
             'success',
-            `Payment ₹${totalAmount.toLocaleString()} confirmed (${paymentDetails.payment_id}). Successfully booked ${seats} seats!`
+            `Booked ${seats} tickets for ₹${totalAmount.toLocaleString()} (${paymentDetails.payment_id}).`
           );
           if (onRefresh) onRefresh();
         } catch (err) {
-          // If backend isn't up, still confirm the client-side state
           notify(
             'success',
-            `Payment ₹${totalAmount.toLocaleString()} verified (${paymentDetails.payment_id})! Reservation recorded.`
+            `Payment ₹${totalAmount.toLocaleString()} confirmed (${paymentDetails.payment_id}).`
           );
         }
       },
       onFailure: (err) => {
         notify(
           'error',
-          `Razorpay payment declined (${err.description || 'Simulated failure'}). Inventory hold released.`
+          `Payment failed (${err.description || 'Declined'}).`
         );
       },
     });
-  }
-
-  async function handleCreateSlot(e) {
-    e.preventDefault();
-    const pid = Number(poiId || pois[0]?.poi_id);
-    if (!pid) return;
-    try {
-      await apiRequest('/api/inventory/slots', {
-        method: 'POST',
-        body: JSON.stringify({
-          poi_id: pid,
-          circuit,
-          window_start: new Date(windowStart).toISOString(),
-          window_end: new Date(windowEnd).toISOString(),
-          capacity_total: Number(capacity),
-          price_inr: Number(priceInr),
-        }),
-      });
-      notify('success', `Published slot "${circuit}".`);
-      onRefresh();
-    } catch (err) {
-      notify('error', err.message, err.pgDetail);
-    }
   }
 
   async function handleHold(slotId) {
@@ -82,7 +51,7 @@ export default function OperatorSection({ pois, slots, holds, onRefresh, notify 
         method: 'POST',
         body: JSON.stringify({ slot_id: slotId, seats }),
       });
-      notify('success', `Held ${seats} seats on Slot #${slotId}.`);
+      notify('success', `Reserved ${seats} tickets.`);
       onRefresh();
     } catch (err) {
       notify('error', err.message, err.pgDetail);
@@ -92,7 +61,7 @@ export default function OperatorSection({ pois, slots, holds, onRefresh, notify 
   async function handleRelease(holdId) {
     try {
       await apiRequest(`/api/inventory/holds/${holdId}/release`, { method: 'POST' });
-      notify('success', `Released Hold #${holdId}.`);
+      notify('success', 'Reservation cancelled.');
       onRefresh();
     } catch (err) {
       notify('error', err.message, err.pgDetail);
@@ -102,98 +71,76 @@ export default function OperatorSection({ pois, slots, holds, onRefresh, notify 
   return (
     <div className="color-block bg-block-coral space-y-6">
       <div>
-        <span className="eyebrow-mono">HERITAGE TICKETS & CAPACITY MANAGEMENT</span>
-        <h2 className="display-lg mt-1">Timed heritage slots with zero overselling.</h2>
+        <h2 className="display-lg">Entry Tickets</h2>
+        <p className="text-xs text-ink/70 mt-1">Reserve or buy timed entry passes for sights and monuments.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
-          <div className="editorial-card space-y-2.5">
-            {slots.map((s) => (
-              <div key={s.slot_id} className="rounded-md bg-surface-soft p-3.5 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="font-bold text-sm">{s.poi_name} · {s.circuit}</div>
-                  <div className="text-xs font-mono">{s.city} · INR {Number(s.price_inr).toLocaleString()}</div>
+      <div className="space-y-4">
+        <div className="editorial-card space-y-2.5">
+          {slots.map((s) => (
+            <div key={s.slot_id} className="rounded-md bg-surface-soft p-3.5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="font-bold text-sm">{s.poi_name} · {s.circuit}</div>
+                <div className="text-xs font-mono">{s.city} · ₹{Number(s.price_inr).toLocaleString()}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="caption-mono px-2.5 py-1 rounded-pill bg-canvas border border-hairline">
+                  {s.seats_taken}/{s.capacity_total}
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  className="w-16 field-input py-1 px-2 text-sm text-center"
+                  value={holdSeatsMap[s.slot_id] ?? 5}
+                  onChange={(e) => setHoldSeatsMap({ ...holdSeatsMap, [s.slot_id]: e.target.value })}
+                />
+                <button onClick={() => handleHold(s.slot_id)} className="btn-secondary text-xs py-1.5 px-3">
+                  <Lock className="w-3.5 h-3.5" /> Reserve
+                </button>
+                <button
+                  onClick={() => handleBuyWithRazorpay(s)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs py-1.5 px-3 rounded flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
+                >
+                  <CreditCard className="w-3.5 h-3.5" /> Buy Ticket
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {lastPayment && (
+          <div className="rounded-lg bg-emerald-950/80 border border-emerald-500/40 p-4 text-emerald-100 flex items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div>
+                <div className="font-bold text-sm text-white">Tickets Confirmed</div>
+                <div className="text-xs font-mono text-emerald-300">
+                  Payment ID: {lastPayment.payment_id} · ₹{Number(lastPayment.amount_inr).toLocaleString()}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="caption-mono px-2.5 py-1 rounded-pill bg-canvas border border-hairline">
-                    {s.seats_taken}/{s.capacity_total}
-                  </span>
-                  <input
-                    type="number"
-                    min="1"
-                    className="w-16 field-input py-1 px-2 text-sm text-center"
-                    value={holdSeatsMap[s.slot_id] ?? 5}
-                    onChange={(e) => setHoldSeatsMap({ ...holdSeatsMap, [s.slot_id]: e.target.value })}
-                  />
-                  <button onClick={() => handleHold(s.slot_id)} className="btn-secondary text-xs py-1.5 px-3">
-                    <Lock className="w-3.5 h-3.5" /> Hold
-                  </button>
-                  <button
-                    onClick={() => handleBuyWithRazorpay(s)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs py-1.5 px-3 rounded flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
-                  >
-                    <CreditCard className="w-3.5 h-3.5" /> Buy & Pay
-                  </button>
-                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setLastPayment(null)}
+              className="text-xs text-emerald-300 hover:text-white px-2 py-1 rounded bg-emerald-900/50"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {holds.length > 0 && (
+          <div className="editorial-card space-y-2">
+            <span className="caption-mono">YOUR RESERVATIONS</span>
+            {holds.slice(0, 5).map((h) => (
+              <div key={h.hold_id} className="flex justify-between items-center text-sm py-1.5 border-b border-hairline-soft">
+                <span>{h.poi_name} ({h.seats} tickets) · {h.state}</span>
+                {h.state === 'HELD' && (
+                  <button onClick={() => handleRelease(h.hold_id)} className="btn-secondary text-xs py-1 px-3">Cancel</button>
+                )}
               </div>
             ))}
           </div>
-
-          {lastPayment && (
-            <div className="rounded-lg bg-emerald-950/80 border border-emerald-500/40 p-4 text-emerald-100 flex items-center justify-between gap-3 animate-in fade-in">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                <div>
-                  <div className="font-bold text-sm text-white">Payment Confirmed via Razorpay Gateway</div>
-                  <div className="text-xs font-mono text-emerald-300">
-                    Payment ID: {lastPayment.payment_id} · Amount: ₹{Number(lastPayment.amount_inr).toLocaleString()}
-                  </div>
-                  <div className="text-[11px] text-emerald-400/80 mt-0.5">
-                    Status: CONFIRMED | Reservation Secured | All Passes Validated
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setLastPayment(null)}
-                className="text-xs text-emerald-300 hover:text-white px-2 py-1 rounded bg-emerald-900/50"
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-
-          {holds.length > 0 && (
-            <div className="editorial-card space-y-2">
-              <span className="caption-mono">ACTIVE & RECENT HOLDS</span>
-              {holds.slice(0, 5).map((h) => (
-                <div key={h.hold_id} className="flex justify-between items-center text-sm py-1.5 border-b border-hairline-soft">
-                  <span>#{h.hold_id} · {h.poi_name} ({h.seats} seats) · {h.state}</span>
-                  {h.state === 'HELD' && (
-                    <button onClick={() => handleRelease(h.hold_id)} className="btn-secondary text-xs py-1 px-3">Release</button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="editorial-card space-y-3 h-fit">
-          <span className="caption-mono">PUBLISH SLOT</span>
-          <form onSubmit={handleCreateSlot} className="space-y-2.5">
-            <select className="field-input" value={poiId || pois[0]?.poi_id || ''} onChange={(e) => setPoiId(e.target.value)}>
-              {pois.filter((p) => p.capacity_managed).map((p) => <option key={p.poi_id} value={p.poi_id}>{p.name}</option>)}
-            </select>
-            <input className="field-input" value={circuit} onChange={(e) => setCircuit(e.target.value)} required />
-            <input className="field-input" type="datetime-local" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} required />
-            <input className="field-input" type="datetime-local" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} required />
-            <div className="grid grid-cols-2 gap-2">
-              <input className="field-input" type="number" min="1" value={capacity} onChange={(e) => setCapacity(e.target.value)} required />
-              <input className="field-input" type="number" min="0" value={priceInr} onChange={(e) => setPriceInr(e.target.value)} required />
-            </div>
-            <button type="submit" className="btn-primary w-full"><PlusCircle className="w-4 h-4" /> Publish</button>
-          </form>
-        </div>
+        )}
       </div>
     </div>
   );

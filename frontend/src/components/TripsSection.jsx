@@ -4,11 +4,8 @@ import {
   Plus,
   Calendar,
   Compass,
-  MapPin,
-  Check,
   ArrowRight,
   ShieldCheck,
-  Clock,
   UserPlus,
   Sparkles,
 } from 'lucide-react';
@@ -123,15 +120,15 @@ export default function TripsSection({
     <div className="color-block bg-block-lime space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <span className="eyebrow-mono">TRIP SETTINGS & TRAVELERS</span>
-          <h2 className="display-lg mt-1">Manage your group and quorum threshold.</h2>
+          <h2 className="display-lg">Trips</h2>
+          <p className="text-xs text-ink/70 mt-1">Switch trips, manage travelers, or start a new one.</p>
         </div>
         <button
           onClick={() => setSubTab('create')}
           className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shrink-0 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>Plan New Trip</span>
+          <span>New Trip</span>
         </button>
       </div>
 
@@ -140,39 +137,39 @@ export default function TripsSection({
         <div className="bg-white border border-hairline rounded-2xl p-4 shadow-xs">
           <div className="flex items-center gap-2 text-neutral-400 text-xs font-medium">
             <Compass className="w-3.5 h-3.5 text-blue-600" />
-            <span>ALL REGISTERED TRIPS</span>
+            <span>TRIPS</span>
           </div>
           <div className="text-xl font-bold font-mono text-slate-900 mt-1">
-            {trips.length} Group Trips
+            {trips.length}
           </div>
           <p className="text-[11px] text-neutral-500 mt-0.5">
-            Active across Indian heritage & nature circuits
+            Your group trips
           </p>
         </div>
 
         <div className="bg-white border border-hairline rounded-2xl p-4 shadow-xs">
           <div className="flex items-center gap-2 text-neutral-400 text-xs font-medium">
             <Users className="w-3.5 h-3.5 text-purple-600" />
-            <span>TRAVELERS IN ACTIVE TRIP</span>
+            <span>TRAVELERS</span>
           </div>
           <div className="text-xl font-bold font-mono text-slate-900 mt-1">
-            {currentMembers.length} Members
+            {currentMembers.length}
           </div>
-          <p className="text-[11px] text-neutral-500 mt-0.5">
-            In #{activeTripId}: {activeTripObj?.title || 'Active Trip'}
+          <p className="text-[11px] text-neutral-500 mt-0.5 truncate">
+            {activeTripObj?.title || 'Current trip'}
           </p>
         </div>
 
         <div className="bg-white border border-hairline rounded-2xl p-4 shadow-xs">
           <div className="flex items-center gap-2 text-neutral-400 text-xs font-medium">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>ACTIVE QUORUM RULE</span>
+            <span>APPROVAL RULE</span>
           </div>
           <div className="text-xl font-bold font-mono text-slate-900 mt-1">
-            {activeTripObj?.quorum_pct || 60}% Majority
+            {activeTripObj?.quorum_pct || 60}%
           </div>
           <p className="text-[11px] text-neutral-500 mt-0.5">
-            Consensus policy enforced at booking confirmation
+            Votes needed to confirm plans
           </p>
         </div>
       </div>
@@ -197,7 +194,7 @@ export default function TripsSection({
               : 'text-neutral-500 hover:text-slate-900'
           }`}
         >
-          <Users className="w-3.5 h-3.5 text-purple-600" /> Active Trip Details
+          <Users className="w-3.5 h-3.5 text-purple-600" /> Current Trip
         </button>
         <button
           onClick={() => setSubTab('create')}
@@ -224,15 +221,6 @@ export default function TripsSection({
                 }`}
               >
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
-                      Trip #{t.trip_id}
-                    </span>
-                    <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
-                      {t.status || 'Active'}
-                    </span>
-                  </div>
-
                   <div>
                     <h3 className="text-lg font-bold text-slate-900">{t.title}</h3>
                     <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1.5">
@@ -248,11 +236,11 @@ export default function TripsSection({
                     </div>
                     <div className="flex items-center justify-between text-neutral-600">
                       <span>Travelers:</span>
-                      <span className="font-mono font-bold text-slate-900">{t.member_count || 1} Registered</span>
+                      <span className="font-mono font-bold text-slate-900">{t.member_count || 1}</span>
                     </div>
                     <div className="flex items-center justify-between text-neutral-600">
-                      <span>Quorum Policy:</span>
-                      <span className="font-mono font-semibold text-slate-900">{t.quorum_pct}% YES threshold</span>
+                      <span>Approval needed:</span>
+                      <span className="font-mono font-semibold text-slate-900">{t.quorum_pct}%</span>
                     </div>
                   </div>
                 </div>
@@ -271,7 +259,7 @@ export default function TripsSection({
                       onClick={() => handleSelectAndOpen(t.trip_id)}
                       className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-black text-white font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-xs cursor-pointer"
                     >
-                      <span>Select & Open Trip</span>
+                      <span>Switch to Trip</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -285,9 +273,9 @@ export default function TripsSection({
               <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 text-slate-400 flex items-center justify-center mx-auto">
                 <Compass className="w-6 h-6 text-slate-400" />
               </div>
-              <h3 className="text-base font-bold text-slate-800">No previous trips</h3>
+              <h3 className="text-base font-bold text-slate-800">No trips yet</h3>
               <p className="text-xs text-neutral-500 max-w-sm mx-auto">
-                You do not have any previous or active group trips recorded yet.
+                Create a trip to start planning with your group.
               </p>
               <div className="pt-2">
                 <button
@@ -295,7 +283,7 @@ export default function TripsSection({
                   className="btn-primary text-xs py-2 px-4 cursor-pointer inline-flex items-center gap-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Create Your First Trip</span>
+                  <span>Create Trip</span>
                 </button>
               </div>
             </div>
@@ -310,19 +298,11 @@ export default function TripsSection({
           <div className="lg:col-span-8 bg-white border border-hairline rounded-2xl p-6 shadow-xs space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-hairline gap-3">
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-orange-600 bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
-                    Trip #{activeTripId}
-                  </span>
-                  <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
-                    {tripDetail?.trip?.status || 'PROPOSED'}
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 mt-1">
+                <h3 className="text-xl font-bold text-slate-900">
                   {tripDetail?.trip?.title || activeTripObj?.title || 'Trip Details'}
                 </h3>
                 <p className="text-xs text-neutral-500 mt-0.5">
-                  Travel Window: {tripDetail?.trip?.start_date} to {tripDetail?.trip?.end_date} · Quorum: {tripDetail?.trip?.quorum_pct}% YES
+                  {tripDetail?.trip?.start_date} to {tripDetail?.trip?.end_date} · {tripDetail?.trip?.quorum_pct}% approval needed
                 </p>
               </div>
 
@@ -330,21 +310,16 @@ export default function TripsSection({
                 onClick={() => onNavigateTab && onNavigateTab('chat')}
                 className="btn-secondary text-xs py-2 px-4 flex items-center gap-1.5 self-start cursor-pointer"
               >
-                <span>Go to Workspace</span>
+                <span>Open Workspace</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {/* Travelers Grid */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-neutral-400">
-                  Registered Travelers ({currentMembers.length})
-                </span>
-                <span className="text-xs text-neutral-400">
-                  Group Travelers List
-                </span>
-              </div>
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 block">
+                Travelers ({currentMembers.length})
+              </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {currentMembers.map((m) => {
@@ -398,7 +373,7 @@ export default function TripsSection({
             {tripDetail?.constraints && tripDetail.constraints.length > 0 && (
               <div className="pt-4 border-t border-hairline space-y-3">
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-neutral-400 block">
-                  Declared Member Preferences & Constraints ({tripDetail.constraints.length})
+                  Preferences ({tripDetail.constraints.length})
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {tripDetail.constraints.map((c) => (
@@ -421,13 +396,13 @@ export default function TripsSection({
           <div className="lg:col-span-4 bg-white border border-hairline rounded-2xl p-6 shadow-xs space-y-4 h-fit">
             <div className="flex items-center gap-2 pb-2 border-b border-hairline">
               <UserPlus className="w-4 h-4 text-purple-600" />
-              <h4 className="text-sm font-bold text-slate-900">Add Traveler to Trip</h4>
+              <h4 className="text-sm font-bold text-slate-900">Add Traveler</h4>
             </div>
 
             <form onSubmit={handleAddMember} className="space-y-3.5">
               <div>
                 <label className="text-xs font-mono font-bold text-neutral-500 block mb-1">
-                  SELECT REGISTERED USER
+                  TRAVELER
                 </label>
                 <select
                   className="w-full bg-surface-soft border border-hairline rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-black cursor-pointer"
@@ -435,7 +410,7 @@ export default function TripsSection({
                   onChange={(e) => setMemberUserId(e.target.value)}
                   required
                 >
-                  <option value="">Select user...</option>
+                  <option value="">Choose person...</option>
                   {availableUsersToAdd.map((u) => (
                     <option key={u.user_id} value={u.user_id}>
                       {u.full_name} ({u.home_city || 'India'})
@@ -444,14 +419,14 @@ export default function TripsSection({
                 </select>
                 {availableUsersToAdd.length === 0 && (
                   <p className="text-[10px] text-neutral-400 mt-1">
-                    All registered users are already members of this trip.
+                    Everyone is already in this trip.
                   </p>
                 )}
               </div>
 
               <div>
                 <label className="text-xs font-mono font-bold text-neutral-500 block mb-1">
-                  INDIVIDUAL BUDGET CEILING (₹)
+                  BUDGET LIMIT (₹)
                 </label>
                 <input
                   type="number"
@@ -466,7 +441,7 @@ export default function TripsSection({
 
               <div>
                 <label className="text-xs font-mono font-bold text-neutral-500 block mb-1">
-                  JOINING CITY
+                  FROM CITY
                 </label>
                 <input
                   type="text"
@@ -484,7 +459,7 @@ export default function TripsSection({
                 className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-xs cursor-pointer disabled:opacity-40"
               >
                 <Plus className="w-4 h-4" />
-                <span>{addingMember ? 'Adding...' : 'Add Traveler to Trip'}</span>
+                <span>{addingMember ? 'Adding...' : 'Add Traveler'}</span>
               </button>
             </form>
           </div>
@@ -495,20 +470,20 @@ export default function TripsSection({
       {subTab === 'create' && (
         <div className="max-w-2xl mx-auto bg-white border border-hairline rounded-2xl p-6 sm:p-8 shadow-xs space-y-6">
           <div className="pb-3 border-b border-hairline">
-            <h3 className="text-lg font-bold text-slate-900">Create New Group Tourism Trip</h3>
+            <h3 className="text-lg font-bold text-slate-900">New Trip</h3>
             <p className="text-xs text-neutral-500 mt-0.5">
-              Initializes a new group trip with travel date ranges and default quorum threshold.
+              Set your trip name, dates, and group approval rule.
             </p>
           </div>
 
           <form onSubmit={handleCreateTrip} className="space-y-4">
             <div>
               <label className="text-xs font-mono font-bold text-neutral-500 block mb-1">
-                TRIP TITLE
+                TRIP NAME
               </label>
               <input
                 type="text"
-                placeholder="e.g. Rajasthan Royal Palaces & Deserts 2027"
+                placeholder="e.g. Rajasthan Winter 2027"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="w-full bg-surface-soft border border-hairline rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-black"
@@ -547,7 +522,7 @@ export default function TripsSection({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-mono font-bold text-neutral-500 block mb-1">
-                  QUORUM REQUIREMENT (% YES)
+                  APPROVAL NEEDED (%)
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -559,13 +534,13 @@ export default function TripsSection({
                     className="w-24 bg-surface-soft border border-hairline rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-black"
                     required
                   />
-                  <span className="text-xs text-neutral-400 font-mono">% required to approve plans</span>
+                  <span className="text-xs text-neutral-400 font-mono">% YES votes</span>
                 </div>
               </div>
 
               <div>
                 <label className="text-xs font-mono font-bold text-neutral-500 block mb-1">
-                  ORGANIZER BUDGET CEILING (₹)
+                  YOUR BUDGET (₹)
                 </label>
                 <input
                   type="number"
@@ -581,7 +556,7 @@ export default function TripsSection({
 
             <div>
               <label className="text-xs font-mono font-bold text-neutral-500 block mb-1">
-                ORGANIZER JOINING CITY
+                DEPARTURE CITY
               </label>
               <input
                 type="text"
@@ -607,7 +582,7 @@ export default function TripsSection({
                 className="btn-primary text-xs py-2.5 px-6 flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>{creating ? 'Creating...' : 'Create Trip & Launch Workspace'}</span>
+                <span>{creating ? 'Creating...' : 'Create Trip'}</span>
               </button>
             </div>
           </form>

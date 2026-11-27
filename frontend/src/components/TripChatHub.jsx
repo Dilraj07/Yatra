@@ -1,1257 +1,839 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Calendar, Lock, Plus, RefreshCw, Sparkles } from 'lucide-react';
+import { chatApi, getActiveChatUser, getChatAuthToken } from '../api/chatApi';
+import { ChatRealtimeClient } from '../api/chatRealtime';
+import ChatWindow from './chat/ChatWindow';
+import ContextDrawer from './chat/ContextDrawer';
+import ConversationSidebar from './chat/ConversationSidebar';
 import {
-  MessageSquare,
-  Sparkles,
-  Send,
-  Users,
-  UserPlus,
-  Trash2,
-  MapPin,
-  Calendar,
-  Ticket,
-  CheckCircle2,
-  Clock,
-  ArrowRight,
-  Vote,
-  RefreshCw,
-  Plus,
-  Coins,
-  Bot,
-  Lock,
-  Compass,
-  Check,
-  X,
-  CreditCard,
-  Radio,
-} from 'lucide-react';
-import { apiRequest, settleSplitTransfer } from '../api/client';
-import { openRazorpayCheckout } from '../api/payment';
-import LatexText from './LatexText';
+  ForwardMessageModal,
+  InvitationsModal,
+  NewConversationModal,
+} from './chat/GroupModals';
 
 export default function TripChatHub({
   activeTripId,
   setActiveTripId,
-  trips,
+  tripId: tripIdProp,
+  trips = [],
   tripDetail,
-  allUsers,
-  itineraries,
-  proposals,
-  slots,
-  finances,
+  itineraries = [],
+  allUsers = [],
   currentUser,
   onOpenAuth,
+  onNavigateTab,
   onRefresh,
-  notify,
+  onItinerarySynced,
+  externalNavTarget,
+  onNotificationStateChange,
 }) {
+  const tripId = activeTripId ?? tripIdProp;
+  const token = getChatAuthToken();
+  const activeUser = currentUser?.user_id ? currentUser : getActiveChatUser();
+  const currentUserId = activeUser?.user_id || activeUser?.sub || null;
+
+  const [conversations, setConversations] = useState([]);
+  const [activeConvId, setActiveConvId] = useState(null);
+  const [mobileShowChat, setMobileShowChat] = useState(false);
+
+  const [convDetail, setConvDetail] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [myMembership, setMyMembership] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [inputText, setInputText] = useState('');
-  const [sending, setSending] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [activeTab, setActiveTab] = useState('plan'); // 'plan' | 'tickets' | 'budget'
-  const chatScrollRef = useRef(null);
+  const [tasks, setTasks] = useState([]);
+  const [groupInvitations, setGroupInvitations] = useState([]);
+  const [myInvitations, setMyInvitations] = useState([]);
+  const [platformUsers, setPlatformUsers] = useState(allUsers);
+  const [onlineUserIds, setOnlineUserIds] = useState([]);
 
-  // Member management states
-  const [addMemberOpen, setAddMemberOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [newMemberRole, setNewMemberRole] = useState('MEMBER');
-  const [newMemberCity, setNewMemberCity] = useState('Bengaluru');
-  const [newMemberBudget, setNewMemberBudget] = useState(25000);
-  const [memberActionLoading, setMemberActionLoading] = useState(false);
+  const [typingMap, setTypingMap] = useState({});
+  const typingTimersRef = useRef({});
 
-  // Quick expense modal states
-  const [addExpenseOpen, setAddExpenseOpen] = useState(false);
-  const [expDesc, setExpDesc] = useState('');
-  const [expAmount, setExpAmount] = useState(1500);
-  const [expPayerId, setExpPayerId] = useState('');
-  const [expLoading, setExpLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [onlyPinned, setOnlyPinned] = useState(false);
+  const [onlyBookmarked, setOnlyBookmarked] = useState(false);
+  const [threadRootId, setThreadRootId] = useState(null);
 
-  // Load chat messages when trip changes
-  const loadMessages = async () => {
-    if (!activeTripId) return;
-    try {
-      const data = await apiRequest(`/api/chat/trip/${activeTripId}`);
-      setMessages(data || []);
-      setTimeout(() => {
-        if (chatScrollRef.current) {
-          chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-        }
-      }, 50);
-    } catch (err) {
-      console.error('Failed to load chat messages', err);
-    }
-  };
+  const [drawerTab, setDrawerTab] = useState(null);
+  const [newTaskTrigger, setNewTaskTrigger] = useState(0);
+  const [focusedTaskId, setFocusedTaskId] = useState(null);
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [showInvitesModal, setShowInvitesModal] = useState(false);
+  const [forwardMsg, setForwardMsg] = useState(null);
+
+  const [realtimeStatus, setRealtimeStatus] = useState('disconnected');
+  const [summarizingTop, setSummarizingTop] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [noticeMsg, setNoticeMsg] = useState('');
+
+  // Refs keep live callback identity stable so realtime socket never loops/reconnects
+  const liveClientRef = useRef(null);
+  const activeConvIdRef = useRef(null);
+  const lastMsgIdRef = useRef(0);
+  const lastSyncedTripIdRef = useRef(null);
+  const onNotifChangeRef = useRef(onNotificationStateChange);
+  const onItinerarySyncedRef = useRef(onItinerarySynced);
+  const onRefreshRef = useRef(onRefresh);
+
+  onNotifChangeRef.current = onNotificationStateChange;
+  onItinerarySyncedRef.current = onItinerarySynced;
+  onRefreshRef.current = onRefresh;
 
   useEffect(() => {
-    loadMessages();
-  }, [activeTripId]);
-
-  // Scroll to bottom on new messages
-  useEffect(() => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    if (Array.isArray(allUsers) && allUsers.length > 0) {
+      setPlatformUsers((prev) => (prev.length > 0 ? prev : allUsers));
     }
+  }, [allUsers]);
+
+  useEffect(() => {
+    activeConvIdRef.current = activeConvId;
+  }, [activeConvId]);
+
+  useEffect(() => {
+    lastMsgIdRef.current = messages.length > 0 ? messages[messages.length - 1].message_id : 0;
   }, [messages]);
 
-  // Send human message and receive active agent monitoring response
-  const handleSendMessage = async (e, textOverride = null) => {
-    if (e) e.preventDefault();
-    const textToSend = (textOverride || inputText).trim();
-    if (!textToSend || !activeTripId) return;
+  function showError(msg) {
+    setErrorMsg(msg || 'Action could not be completed.');
+  }
 
-    const sender = currentUser || {
-      user_id: 2,
-      full_name: 'Arya Wadhwa',
-      email: 'arya@yatra.local',
-    };
+  function showNotice(msg) {
+    setNoticeMsg(msg);
+    setTimeout(() => setNoticeMsg(''), 2800);
+  }
 
-    setSending(true);
-    setInputText('');
+  const loadBootstrap = useCallback(async (preferredConvId = null) => {
+    if (!getChatAuthToken()) return;
     try {
-      const newMsg = await apiRequest(`/api/chat/trip/${activeTripId}/messages`, {
-        method: 'POST',
-        body: JSON.stringify({
-          text: textToSend,
-          sender_name: sender.full_name,
-          sender_id: sender.user_id,
-        }),
-      });
-
-      if (newMsg?.agent_message) {
-        setMessages((prev) => [...prev, newMsg, newMsg.agent_message]);
-      } else if (newMsg && newMsg.text) {
-        setMessages((prev) => [...prev, newMsg]);
-      } else {
-        // Optimistic append if offline or sandbox
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: `msg_${Date.now()}`,
-            trip_id: activeTripId,
-            sender_id: sender.user_id,
-            sender_name: sender.full_name,
-            text: textToSend,
-            created_at: new Date().toISOString(),
-            is_agent: false,
-          },
-        ]);
-      }
-    } catch (err) {
-      notify('error', `Failed to send: ${err.message}`);
-    } finally {
-      setSending(false);
-    }
-  };
-
-  // Add Member to Trip
-  const handleAddMember = async (e) => {
-    if (e) e.preventDefault();
-    if (!selectedUserId || !activeTripId) return;
-
-    setMemberActionLoading(true);
-    try {
-      const allKnownUsers = (allUsers && allUsers.length > 0 ? allUsers : [
-        { user_id: 1, full_name: 'Dilraj Singh', email: 'dilraj@yatra.local', home_city: 'Bengaluru' },
-        { user_id: 2, full_name: 'Arya Wadhwa', email: 'arya@yatra.local', home_city: 'Delhi' },
-        { user_id: 3, full_name: 'Aarush Luthra', email: 'aarush@yatra.local', home_city: 'Mumbai' },
-        { user_id: 4, full_name: 'Priya Sharma', email: 'priya@yatra.local', home_city: 'Pune' },
-        { user_id: 5, full_name: 'Rohan Gupta', email: 'rohan@yatra.local', home_city: 'Jaipur' },
-        { user_id: 6, full_name: 'Ananya Iyer', email: 'ananya@yatra.local', home_city: 'Chennai' },
-        { user_id: 7, full_name: 'Vikram Malhotra', email: 'vikram@yatra.local', home_city: 'Hyderabad' },
+      const [convRes, invRes, usersRes] = await Promise.all([
+        chatApi.listConversations(),
+        chatApi.listMyInvitations().catch(() => ({ invitations: [] })),
+        chatApi.listPlatformUsers().catch(() => []),
       ]);
-      const selectedUser = allKnownUsers.find((u) => String(u.user_id) === String(selectedUserId)) || {
-        user_id: Number(selectedUserId),
-        full_name: `Traveler #${selectedUserId}`,
-      };
+      const list = convRes.conversations || [];
+      setConversations(list);
+      setOnlineUserIds(convRes.online_user_ids || []);
+      setMyInvitations(invRes.invitations || []);
+      setPlatformUsers(Array.isArray(usersRes) ? usersRes : usersRes.users || []);
 
-      await apiRequest(`/api/trips/${activeTripId}/members`, {
-        method: 'POST',
-        body: JSON.stringify({
-          user_id: Number(selectedUserId),
-          role: newMemberRole,
-          joining_city: newMemberCity,
-          budget_ceiling: Number(newMemberBudget) || 25000,
+      setActiveConvId((prev) => {
+        if (preferredConvId && list.some((c) => Number(c.conversation_id) === Number(preferredConvId))) {
+          return Number(preferredConvId);
+        }
+        if (prev && list.some((c) => Number(c.conversation_id) === Number(prev))) {
+          return prev;
+        }
+        const tripMatch = list.find((c) => Number(c.trip_id) === Number(tripId));
+        return tripMatch?.conversation_id || list[0]?.conversation_id || null;
+      });
+    } catch (err) {
+      if (err.status !== 401) showError(err.message);
+    }
+  }, [tripId]);
+
+  const loadNotifications = useCallback(async () => {
+    if (!getChatAuthToken()) return;
+    try {
+      const res = await chatApi.listNotifications();
+      onNotifChangeRef.current?.(res.notifications || [], res.unread_count || 0);
+    } catch {
+      // ignore silently if unauthorized
+    }
+  }, []);
+
+  const loadBootstrapRef = useRef(loadBootstrap);
+  const loadNotificationsRef = useRef(loadNotifications);
+  loadBootstrapRef.current = loadBootstrap;
+  loadNotificationsRef.current = loadNotifications;
+
+  const loadConversationData = useCallback(async (convId) => {
+    if (!convId || !getChatAuthToken()) return;
+    try {
+      const [detailRes, msgRes, taskRes] = await Promise.all([
+        chatApi.getConversation(convId),
+        chatApi.listMessages(convId, {
+          search: searchQuery || undefined,
+          only_pinned: onlyPinned || undefined,
+          only_bookmarked: onlyBookmarked || undefined,
+          thread_root_id: threadRootId || undefined,
+          limit: 100,
         }),
-      });
+        chatApi.listTasks(convId),
+      ]);
+      setConvDetail(detailRes.conversation);
+      setMyMembership(detailRes.my_membership);
+      setMembers(detailRes.members || []);
+      if (detailRes.online_user_ids) setOnlineUserIds(detailRes.online_user_ids);
 
-      // Announce member addition in chat
-      const announceText = `Traveler Added: ${selectedUser.full_name} (${newMemberCity}) joined the trip. Quorum recalculated for ${memberCount + 1} travelers.`;
-      try {
-        const announceMsg = await apiRequest(`/api/chat/trip/${activeTripId}/messages`, {
-          method: 'POST',
-          body: JSON.stringify({
-            text: announceText,
-            sender_name: 'Yatra System',
-            sender_id: 0,
-          }),
-        });
-        if (announceMsg?.text) {
-          setMessages((prev) => [...prev, announceMsg]);
-        }
-      } catch (_) {}
+      const loadedMsgs = msgRes.messages || [];
+      setMessages(loadedMsgs);
+      setTasks(taskRes.tasks || []);
 
-      notify('success', `Added ${selectedUser.full_name} to the trip.`);
-      setAddMemberOpen(false);
-      setSelectedUserId('');
-      if (onRefresh) onRefresh(activeTripId);
-      loadMessages();
-    } catch (err) {
-      notify('error', `Failed to add member: ${err.message}`);
-    } finally {
-      setMemberActionLoading(false);
-    }
-  };
-
-  // Remove Member from Trip
-  const handleRemoveMember = async (userId, memberName) => {
-    if (!activeTripId) return;
-    if (!confirm(`Are you sure you want to remove ${memberName} from this trip?`)) return;
-
-    try {
-      await apiRequest(`/api/trips/${activeTripId}/members/${userId}`, {
-        method: 'DELETE',
-      });
-
-      // Announce removal in chat
-      const announceText = `Traveler Removed: ${memberName} has departed the trip. Quorum recalculated for ${Math.max(1, memberCount - 1)} travelers.`;
-      try {
-        const announceMsg = await apiRequest(`/api/chat/trip/${activeTripId}/messages`, {
-          method: 'POST',
-          body: JSON.stringify({
-            text: announceText,
-            sender_name: 'Yatra System',
-            sender_id: 0,
-          }),
-        });
-        if (announceMsg?.text) {
-          setMessages((prev) => [...prev, announceMsg]);
-        }
-      } catch (_) {}
-
-      notify('success', `Removed ${memberName} from the trip.`);
-      if (onRefresh) onRefresh(activeTripId);
-      loadMessages();
-    } catch (err) {
-      notify('error', `Failed to remove member: ${err.message}`);
-    }
-  };
-
-  // Trigger AI Copilot to analyze discussion & update plan
-  const handleAnalyzeChat = async () => {
-    if (!activeTripId) return;
-    setAnalyzing(true);
-    try {
-      const result = await apiRequest(`/api/chat/trip/${activeTripId}/analyze`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
-
-      if (result.messages) {
-        setMessages(result.messages);
+      if (loadedMsgs.length > 0 && !searchQuery && !onlyPinned && !onlyBookmarked) {
+        const latestId = loadedMsgs[loadedMsgs.length - 1].message_id;
+        chatApi
+          .markRead(convId, latestId)
+          .then(() => {
+            setConversations((prev) =>
+              prev.map((c) =>
+                Number(c.conversation_id) === Number(convId) ? { ...c, unread_count: 0 } : c
+              )
+            );
+          })
+          .catch(() => {});
       }
-      notify('success', 'Yatra Copilot analyzed the discussion and generated the plan.');
-      if (onRefresh) onRefresh(activeTripId);
     } catch (err) {
-      notify('error', `AI Analysis failed: ${err.message}`);
-    } finally {
-      setAnalyzing(false);
+      showError(err.message);
     }
-  };
+  }, [searchQuery, onlyPinned, onlyBookmarked, threadRootId]);
 
-  // Add Shared Group Expense
-  const handleAddExpense = async (e) => {
-    if (e) e.preventDefault();
-    if (!activeTripId || !expDesc.trim() || !expAmount) return;
-    const pid = Number(expPayerId || currentUser?.user_id || tripDetail?.members?.[0]?.user_id || 1);
-    setExpLoading(true);
-    try {
-      await apiRequest('/api/expenses', {
-        method: 'POST',
-        body: JSON.stringify({
-          trip_id: activeTripId,
-          payer_id: pid,
-          description: expDesc.trim(),
-          amount: Number(expAmount),
-          currency: 'INR',
-          fx_to_inr: 1.0,
-          rule: 'EQUAL',
-          test_unbalanced_ledger: false,
-        }),
-      });
-      notify('success', `Recorded shared expense: ${expDesc} (₹${Number(expAmount).toLocaleString()})`);
-      setAddExpenseOpen(false);
-      setExpDesc('');
-      if (onRefresh) onRefresh(activeTripId);
-    } catch (err) {
-      notify('error', err.message);
-    } finally {
-      setExpLoading(false);
+  const loadDrawerExtras = useCallback(async (convId, tab, membership) => {
+    if (!convId || !getChatAuthToken()) return;
+    if (tab === 'INFO') {
+      const roleRank = { MEMBER: 1, MODERATOR: 2, ADMIN: 3, OWNER: 4 };
+      const canManage =
+        (roleRank[membership?.role || 'MEMBER'] || 1) >= 3 ||
+        Boolean(membership?.can_manage_members);
+      if (canManage) {
+        chatApi.listGroupInvitations(convId).then((r) => setGroupInvitations(r.invitations || [])).catch(() => {});
+      } else {
+        setGroupInvitations([]);
+      }
     }
-  };
+  }, []);
 
-
-  // Vote on active proposal
-  const handleVote = async (proposalId, choice) => {
-    if (!currentUser) {
-      notify('error', 'Please sign in to vote on trip proposals.');
-      if (onOpenAuth) onOpenAuth();
-      return;
+  useEffect(() => {
+    if (!tripId || conversations.length === 0) return;
+    if (Number(lastSyncedTripIdRef.current) === Number(tripId)) return;
+    const matched = conversations.find((c) => Number(c.trip_id) === Number(tripId));
+    if (matched) {
+      lastSyncedTripIdRef.current = Number(tripId);
+      if (Number(matched.conversation_id) !== Number(activeConvIdRef.current)) {
+        setActiveConvId(matched.conversation_id);
+      }
     }
-    try {
-      await apiRequest(`/api/voting/proposals/${proposalId}/vote`, {
-        method: 'POST',
-        body: JSON.stringify({ choice, user_id: currentUser.user_id }),
-      });
-      notify('success', `Recorded "${choice}" vote.`);
-      if (onRefresh) onRefresh(activeTripId);
-    } catch (err) {
-      notify('error', err.message);
-    }
-  };
+  }, [tripId, conversations]);
 
-  const handlePayItineraryWithRazorpay = () => {
-    const payAmount = totalCost || 18400;
-    openRazorpayCheckout({
-      amountInr: payAmount,
-      title: `${tripDetail?.title || 'Trip Package'} — Full Group Booking`,
-      description: `All ${memberCount} travelers included · Quorum approved`,
-      customerName: currentUser?.full_name || 'Arya Wadhwa',
-      customerEmail: currentUser?.email || 'arya@yatra.local',
-      onSuccess: (paymentDetails) => {
-        notify('success', `Payment ₹${payAmount.toLocaleString()} confirmed (${paymentDetails.payment_id}). Booking complete!`);
-        setMessages((prev) => [
-          ...prev,
-          {
-            message_id: Date.now(),
-            user_id: 0,
-            sender_name: 'Yatra System',
-            is_ai: true,
-            text: `**Payment Captured via Razorpay Gateway**\n• Payment ID: \`${paymentDetails.payment_id}\`\n• Order ID: \`${paymentDetails.order_id}\`\n• Amount: ₹${payAmount.toLocaleString()}\n• Status: \`CONFIRMED\`\n• Group split settled. All member bookings confirmed!`,
-            sent_at: new Date().toISOString(),
-          },
-        ]);
-        if (onRefresh) onRefresh(activeTripId);
+  useEffect(() => {
+    if (!externalNavTarget?.conversationId) return;
+    setActiveConvId(Number(externalNavTarget.conversationId));
+    setMobileShowChat(true);
+    if (externalNavTarget.taskId) {
+      setDrawerTab('TASKS');
+      setFocusedTaskId(externalNavTarget.taskId);
+    }
+  }, [externalNavTarget]);
+
+  // Persistent single realtime connection per signed-in user session
+  useEffect(() => {
+    if (!token || !currentUserId) return;
+    loadBootstrapRef.current();
+    loadNotificationsRef.current();
+
+    const client = new ChatRealtimeClient({
+      onStatusChange: (status) => {
+        setRealtimeStatus(status);
+        if (status === 'connected' && activeConvIdRef.current) {
+          chatApi.listConversations().then((r) => setConversations(r.conversations || [])).catch(() => {});
+          if (lastMsgIdRef.current > 0) {
+            chatApi
+              .listMessages(activeConvIdRef.current, { after_id: lastMsgIdRef.current })
+              .then((r) => {
+                const missed = r.messages || [];
+                if (missed.length > 0) {
+                  setMessages((prev) => {
+                    const existingIds = new Set(prev.map((m) => m.message_id));
+                    return [...prev, ...missed.filter((m) => !existingIds.has(m.message_id))];
+                  });
+                }
+              })
+              .catch(() => {});
+          }
+        }
       },
-      onFailure: (err) => {
-        notify('error', `Razorpay payment declined (${err.description || 'Decline'}). Reservation hold released.`);
-      },
-    });
-  };
+      onEvent: (event, data) => {
+        const cid = Number(data.conversation_id || 0);
+        const isCurrent = cid > 0 && cid === Number(activeConvIdRef.current);
 
-  const handleBuySlotWithRazorpay = (slot) => {
-    const amount = Number(slot.price_inr || 750);
-    openRazorpayCheckout({
-      amountInr: amount,
-      title: `${slot.poi_name} — Timed Entry`,
-      description: slot.circuit,
-      customerName: currentUser?.full_name || 'Arya Wadhwa',
-      customerEmail: currentUser?.email || 'arya@yatra.local',
-      onSuccess: async (paymentDetails) => {
-        try {
-          await apiRequest('/api/inventory/holds', {
-            method: 'POST',
-            body: JSON.stringify({ slot_id: slot.slot_id, seats: 1 }),
+        if (event === 'connected' || event === 'presence_updated') {
+          if (Array.isArray(data.online_user_ids)) setOnlineUserIds(data.online_user_ids);
+          return;
+        }
+
+        if (event === 'typing' && cid) {
+          const key = `${cid}:${data.user_id}`;
+          clearTimeout(typingTimersRef.current[key]);
+          setTypingMap((prev) => {
+            const group = { ...(prev[cid] || {}) };
+            if (data.is_typing) {
+              group[data.user_id] = data.full_name || 'Someone';
+            } else {
+              delete group[data.user_id];
+            }
+            return { ...prev, [cid]: group };
           });
-        } catch (_) {}
-        notify('success', `Ticket booked for ₹${amount.toLocaleString()} (${paymentDetails.payment_id}). Reservation confirmed!`);
-        if (onRefresh) onRefresh();
-      },
-      onFailure: (err) => {
-        notify('error', `Payment declined (${err.description || 'Decline'}). Reservation released.`);
+          if (data.is_typing) {
+            typingTimersRef.current[key] = setTimeout(() => {
+              setTypingMap((prev) => {
+                const group = { ...(prev[cid] || {}) };
+                delete group[data.user_id];
+                return { ...prev, [cid]: group };
+              });
+            }, 3200);
+          }
+          return;
+        }
+
+        if (event === 'message_new' && data.message) {
+          const msg = data.message;
+          if (isCurrent) {
+            setMessages((prev) => {
+              if (prev.some((m) => m.message_id === msg.message_id)) return prev;
+              return [...prev, msg];
+            });
+            if (Number(msg.sender_id) !== Number(currentUserId)) {
+              client.sendRead(cid, msg.message_id);
+            }
+          }
+          chatApi.listConversations().then((r) => setConversations(r.conversations || [])).catch(() => {});
+          return;
+        }
+
+        if (
+          (event === 'message_updated' || event === 'message_deleted' || event === 'message_pinned') &&
+          data.message
+        ) {
+          if (isCurrent) {
+            setMessages((prev) =>
+              prev.map((m) => (m.message_id === data.message.message_id ? data.message : m))
+            );
+          }
+          return;
+        }
+
+        if (event === 'receipt_updated' && isCurrent) {
+          const readIds = new Set((data.message_ids || []).map(Number));
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (!readIds.has(Number(m.message_id))) return m;
+              const stats = m.delivery_stats || {
+                recipient_count: 1,
+                delivered_count: 1,
+                read_count: 0,
+                read_by: [],
+              };
+              const readBy = Array.isArray(stats.read_by) ? [...stats.read_by] : [];
+              if (!readBy.some((r) => Number(r.user_id) === Number(data.user_id))) {
+                readBy.push({
+                  user_id: data.user_id,
+                  full_name: data.full_name,
+                  read_at: new Date().toISOString(),
+                });
+              }
+              return {
+                ...m,
+                delivery_stats: {
+                  ...stats,
+                  read_count: Math.max(Number(stats.read_count || 0), readBy.length),
+                  read_by: readBy,
+                },
+              };
+            })
+          );
+          return;
+        }
+
+        if ((event === 'task_new' || event === 'task_updated') && isCurrent) {
+          chatApi.listTasks(cid).then((r) => setTasks(r.tasks || [])).catch(() => {});
+          return;
+        }
+
+        if (
+          event === 'conversation_updated' ||
+          event === 'membership_updated' ||
+          event === 'agent_config_updated'
+        ) {
+          chatApi.listConversations().then((r) => setConversations(r.conversations || [])).catch(() => {});
+          if (isCurrent) {
+            chatApi
+              .getConversation(cid)
+              .then((d) => {
+                setConvDetail(d.conversation);
+                setMyMembership(d.my_membership);
+                setMembers(d.members || []);
+              })
+              .catch(() => {});
+          }
+          return;
+        }
+
+        if (event === 'invitation_new') {
+          chatApi.listMyInvitations().then((r) => setMyInvitations(r.invitations || [])).catch(() => {});
+          loadNotificationsRef.current();
+          return;
+        }
+
+        if (event === 'notification_new' || event === 'notification_refresh') {
+          loadNotificationsRef.current();
+          return;
+        }
+
+        if (event === 'itinerary_updated' && data.trip_id) {
+          onItinerarySyncedRef.current?.(data.trip_id, data.leg);
+          onRefreshRef.current?.(data.trip_id);
+        }
       },
     });
-  };
 
-  // Current primary itinerary
-  const primaryItin = itineraries?.[0] || null;
-  const legs = primaryItin?.legs || [];
-  const totalCost = legs.reduce((acc, l) => acc + Number(l.est_cost_inr || 0), 0);
-  const memberCount = tripDetail?.members?.length || 1;
-  const costPerPerson = Math.round(totalCost / memberCount);
-  const primaryProposal = proposals?.[0] || null;
+    liveClientRef.current = client;
+    client.connect();
 
-  // Quorum & voting calculations
-  const quorumRequiredPct = tripDetail?.quorum_pct || primaryProposal?.quorum_pct || 60;
-  const currentApprovals = primaryProposal?.approve_count ?? primaryProposal?.yes_count ?? 0;
-  const totalVoters = primaryProposal?.member_count ?? primaryProposal?.total_voters ?? memberCount ?? 1;
-  const currentApprovalPct = primaryProposal?.approval_pct ?? Math.round((currentApprovals / (totalVoters || 1)) * 100);
-  const isQuorumMet = Boolean(primaryProposal?.quorum_met ?? (currentApprovals >= (primaryProposal?.required_votes ?? Math.ceil((totalVoters * quorumRequiredPct) / 100))));
+    return () => {
+      client.disconnect();
+      liveClientRef.current = null;
+    };
+  }, [token, currentUserId]);
+
+  useEffect(() => {
+    if (activeConvId && token) {
+      loadConversationData(activeConvId);
+    }
+  }, [activeConvId, token, loadConversationData]);
+
+  useEffect(() => {
+    if (activeConvId && drawerTab && token) {
+      loadDrawerExtras(activeConvId, drawerTab, myMembership);
+    }
+  }, [activeConvId, drawerTab, myMembership, token, loadDrawerExtras]);
+
+  const activeTypingNames = useMemo(() => {
+    if (!activeConvId) return [];
+    const entries = Object.entries(typingMap[activeConvId] || {});
+    return entries
+      .filter(([uid]) => Number(uid) !== Number(currentUserId))
+      .map(([, name]) => name);
+  }, [typingMap, activeConvId, currentUserId]);
+
+  const openTaskCount = useMemo(
+    () => tasks.filter((t) => !['DONE', 'REJECTED'].includes(t.status)).length,
+    [tasks]
+  );
+
+  const proposedTaskCount = useMemo(
+    () => tasks.filter((t) => t.status === 'PROPOSED').length,
+    [tasks]
+  );
+
+  const linkedTrip = useMemo(() => {
+    if (!convDetail?.trip_id) return null;
+    const found = trips.find((t) => Number(t.trip_id) === Number(convDetail.trip_id));
+    if (found) return found;
+    const td = tripDetail?.trip || tripDetail;
+    return td && Number(td.trip_id) === Number(convDetail.trip_id) ? td : null;
+  }, [convDetail, trips, tripDetail]);
+
+  const scheduledLegsCount = useMemo(() => {
+    if (!linkedTrip) return 0;
+    const activeItin =
+      itineraries.find((i) => Number(i.trip_id) === Number(linkedTrip.trip_id)) ||
+      itineraries[0];
+    return Array.isArray(activeItin?.legs) ? activeItin.legs.length : 0;
+  }, [linkedTrip, itineraries]);
+
+  if (!token) {
+    return (
+      <div className="bg-white border border-hairline rounded-2xl p-10 text-center space-y-3">
+        <div className="w-11 h-11 rounded-full bg-surface-soft border border-hairline mx-auto flex items-center justify-center">
+          <Lock className="w-5 h-5 text-black" />
+        </div>
+        <h3 className="text-base font-bold text-black">Sign in to open Trip Chat</h3>
+        <p className="text-xs text-black/60 max-w-sm mx-auto">
+          Discuss trip plans, assign group tasks, and sync itinerary changes in real time.
+        </p>
+        <button
+          type="button"
+          onClick={onOpenAuth}
+          className="px-5 py-2 rounded-pill bg-black text-white text-xs font-semibold hover:bg-black/85"
+        >
+          Sign In
+        </button>
+      </div>
+    );
+  }
+
+  async function handleSendMessage(payload) {
+    if (!activeConvId) return;
+    const res = await chatApi.sendMessage(activeConvId, payload);
+    setMessages((prev) => {
+      const next = [...prev];
+      if (res.message && !next.some((m) => m.message_id === res.message.message_id)) {
+        next.push(res.message);
+      }
+      if (res.agent_message && !next.some((m) => m.message_id === res.agent_message.message_id)) {
+        next.push(res.agent_message);
+      }
+      return next;
+    });
+    if (res.proposed_task) {
+      chatApi.listTasks(activeConvId).then((r) => setTasks(r.tasks || [])).catch(() => {});
+    }
+    chatApi.listConversations().then((r) => setConversations(r.conversations || [])).catch(() => {});
+  }
+
+  async function handleEditMessage(messageId, newBody) {
+    try {
+      const res = await chatApi.editMessage(messageId, newBody);
+      if (res.message) {
+        setMessages((prev) => prev.map((m) => (m.message_id === messageId ? res.message : m)));
+      }
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  async function handleDeleteMessage(messageId) {
+    try {
+      const res = await chatApi.deleteMessage(messageId);
+      if (res.message) {
+        setMessages((prev) => prev.map((m) => (m.message_id === messageId ? res.message : m)));
+      }
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  async function handleTogglePin(messageId, pin) {
+    try {
+      const res = await chatApi.setPin(messageId, pin);
+      if (res.message) {
+        setMessages((prev) => prev.map((m) => (m.message_id === messageId ? res.message : m)));
+      }
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  async function handleToggleBookmark(messageId) {
+    try {
+      const res = await chatApi.toggleBookmark(messageId);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.message_id === messageId ? { ...m, is_bookmarked: res.is_bookmarked } : m
+        )
+      );
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  async function handleQuickSummarize() {
+    if (!activeConvId || summarizingTop) return;
+    setSummarizingTop(true);
+    try {
+      await chatApi.summarizeConversation(activeConvId);
+      showNotice('Summary posted.');
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      setSummarizingTop(false);
+    }
+  }
+
+  function handleSelectConversation(convId) {
+    setSearchQuery('');
+    setOnlyPinned(false);
+    setOnlyBookmarked(false);
+    setThreadRootId(null);
+    setFocusedTaskId(null);
+    setActiveConvId(convId);
+    setMobileShowChat(true);
+    const chosen = conversations.find((c) => Number(c.conversation_id) === Number(convId));
+    if (chosen?.trip_id && setActiveTripId && Number(chosen.trip_id) !== Number(tripId)) {
+      lastSyncedTripIdRef.current = Number(chosen.trip_id);
+      setActiveTripId(Number(chosen.trip_id));
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Trip Header Banner */}
-      <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-semibold uppercase tracking-wider bg-block-lime text-black border border-black/10">
-                <Compass className="w-3.5 h-3.5" /> Group Trip
-              </span>
-              <span className="text-xs font-mono px-2.5 py-0.5 rounded-pill bg-surface-soft border border-hairline text-black/70">
-                {tripDetail?.status || 'Active'}
-              </span>
-            </div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-black">
-              {tripDetail?.title || 'Trip Discussion'}
-            </h1>
-            <div className="flex flex-wrap items-center gap-4 text-xs text-black/60 pt-0.5">
-              <span className="flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-black/40" />{' '}
-                {tripDetail?.travel_window
-                  ? String(tripDetail.travel_window).replace(/[[\]()"]/g, '').split(',').join(' to ')
-                  : 'Dec 18 - 20, 2026'}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Users className="w-3.5 h-3.5 text-black/40" /> {memberCount} Travelers
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Vote className="w-3.5 h-3.5 text-black/40" /> Quorum: {tripDetail?.quorum_pct || 60}%
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Interactive Member Roster & Management */}
-        <div className="pt-4 mt-4 border-t border-hairline space-y-2.5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="caption-mono text-black/60">
-                TRAVELERS & QUORUM PARTICIPANTS ({tripDetail?.members?.length || memberCount})
-              </span>
-              <span className="text-xs text-black/30">·</span>
-              <span className="text-xs text-black/60">
-                Quorum: {Math.ceil(((tripDetail?.members?.length || memberCount) * quorumRequiredPct) / 100)} of {tripDetail?.members?.length || memberCount} required ({quorumRequiredPct}%)
-              </span>
-            </div>
-            <button
-              onClick={() => setAddMemberOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-semibold bg-sky-50 text-sky-900 hover:bg-sky-100 border border-sky-300 transition-colors shadow-2xs self-start sm:self-auto cursor-pointer"
-            >
-              <UserPlus className="w-3.5 h-3.5 text-sky-700" />
-              <span>Add Traveler</span>
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {(tripDetail?.members || []).map((m) => (
-              <div
-                key={m.user_id}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-pill text-xs bg-surface-soft text-black border border-hairline font-medium hover:border-black/30 transition-all group"
-              >
-                <div className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold">
-                  {m.full_name?.charAt(0) || 'U'}
-                </div>
-                <span>{m.full_name}</span>
-                <span className="text-[10px] text-black/50 font-mono">
-                  {m.joining_city ? `${m.joining_city} · ` : ''}₹{Number(m.budget_ceiling || 25000).toLocaleString()}
-                </span>
-                <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded-xs bg-white text-black/70 border border-hairline">
-                  {m.role?.toLowerCase()}
-                </span>
-                {m.role !== 'ORGANIZER' && (
-                  <button
-                    onClick={() => handleRemoveMember(m.user_id, m.full_name)}
-                    title={`Remove ${m.full_name} from trip`}
-                    className="w-4 h-4 rounded-full hover:bg-rose-100 hover:text-rose-700 text-black/30 flex items-center justify-center transition-colors ml-0.5 cursor-pointer"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+    <div className="space-y-3">
+      {/* Contextual Action Bar aligned to the active conversation */}
+      {convDetail && (
+        <div className="px-4 py-2 bg-block-lime border border-hairline rounded-2xl flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0 text-xs text-black">
+            {linkedTrip ? (
+              <>
+                <span className="font-bold truncate max-w-[260px]">{linkedTrip.title}</span>
+                {linkedTrip.travel_window && (
+                  <span className="px-2 py-0.5 rounded-pill bg-white/80 border border-hairline font-medium">
+                    {linkedTrip.travel_window.replace(',', ' to ')}
+                  </span>
                 )}
-              </div>
-            ))}
+                <span className="text-black/70 font-medium">
+                  {scheduledLegsCount} stops · {openTaskCount} open task{openTaskCount === 1 ? '' : 's'}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="font-bold truncate">{convDetail.display_title || convDetail.title}</span>
+                <span className="text-black/70 font-medium">
+                  {members.length} member{members.length === 1 ? '' : 's'} · {openTaskCount} open task
+                  {openTaskCount === 1 ? '' : 's'}
+                </span>
+              </>
+            )}
           </div>
-        </div>
-      </div>
 
-      {/* Main Dual-Column Hub: Chat on Left (60%), Live Plan Snapshot on Right (40%) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Group Discussion Chat with AI Copilot (Editorial Frame) */}
-        <div className="lg:col-span-7 bg-white border border-hairline rounded-2xl flex flex-col shadow-xs h-[740px] overflow-hidden">
-          {/* Chat Header with Active Agent Monitor Indicator */}
-          <div className="p-4 border-b border-hairline bg-surface-soft/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-block-lilac/60 border border-block-lilac text-black flex items-center justify-center font-bold shrink-0">
-                <MessageSquare className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-bold text-black">Trip Group Chat</h2>
-                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-pill bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-mono font-medium">
-                    <span className="relative flex h-1.5 w-1.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-600"></span>
-                    </span>
-                    <span>AGENT MONITOR ACTIVE</span>
-                  </div>
-                </div>
-                <p className="text-xs text-black/60">Collaborate with travelers · Copilot monitors discussion</p>
-              </div>
-            </div>
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              disabled={summarizingTop}
+              onClick={handleQuickSummarize}
+              className="px-3 py-1 rounded-pill bg-white hover:bg-surface-soft border border-hairline text-xs font-semibold text-black flex items-center gap-1 disabled:opacity-50"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{summarizingTop ? 'Summarizing...' : 'Summarize'}</span>
+            </button>
 
             <button
-              onClick={handleAnalyzeChat}
-              disabled={analyzing}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-pill text-xs font-semibold bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300/80 active:scale-95 transition-all shadow-xs disabled:opacity-40 self-start sm:self-auto cursor-pointer"
+              type="button"
+              onClick={() => {
+                setDrawerTab('TASKS');
+                setNewTaskTrigger((n) => n + 1);
+              }}
+              className="px-3 py-1 rounded-pill bg-white hover:bg-surface-soft border border-hairline text-xs font-semibold text-black flex items-center gap-1"
             >
-              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
-              <span>{analyzing ? 'Synthesizing...' : 'Synthesize Consensus'}</span>
+              <Plus className="w-3.5 h-3.5" />
+              <span>
+                {proposedTaskCount > 0 ? `Review Tasks (${proposedTaskCount})` : 'Add Task'}
+              </span>
             </button>
-          </div>
 
-
-          {/* Chat Message Stream (Soft surface-soft: #f7f7f5 from design system) */}
-          <div ref={chatScrollRef} className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-surface-soft">
-            {messages.map((msg, index) => {
-              const isAi = msg.is_agent;
-              const isMe = currentUser && msg.sender_id === currentUser.user_id;
-
-              if (isAi) {
-                return (
-                  <div
-                    key={msg.id || index}
-                    className="my-3 p-4 rounded-2xl bg-block-lilac/30 border border-block-lilac/70 shadow-2xs space-y-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-purple-100 border border-purple-200 text-purple-700 flex items-center justify-center">
-                          <Bot className="w-3.5 h-3.5 text-purple-700" />
-                        </div>
-                        <span className="text-xs font-bold text-black">Yatra Copilot</span>
-                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-pill bg-white text-black/80 font-medium border border-hairline">
-                          AI Agent
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-black/40">
-                        {msg.created_at
-                          ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : ''}
-                      </span>
-                    </div>
-
-                    {/* Formatted Text with LaTeX equations */}
-                    <LatexText text={msg.text} />
-
-                    {msg.plan_summary && (
-                      <div className="bg-white rounded-xl p-3.5 border border-hairline shadow-2xs space-y-2 mt-2">
-                        <div className="flex items-center justify-between text-xs border-b border-hairline pb-2">
-                          <span className="font-semibold text-black flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-accent-magenta" />
-                            {msg.plan_summary.destination} Itinerary (v{msg.plan_summary.version})
-                          </span>
-                          <span className="font-mono text-semantic-success font-bold">
-                            ₹{Number(msg.plan_summary.per_person_est).toLocaleString()} / person
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-[11px] text-black/70">
-                          <div>
-                            <span className="text-black/40">Total Group Cost:</span> ₹{Number(msg.plan_summary.total_cost).toLocaleString()}
-                          </div>
-                          <div>
-                            <span className="text-black/40">Scheduled Legs:</span> {msg.plan_summary.leg_count} activities
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              const getSenderMeta = (name) => {
-                const n = (name || '').toLowerCase();
-                if (n.includes('dilraj')) return { initials: 'DS', bg: 'bg-purple-100 text-purple-800 border-purple-200' };
-                if (n.includes('arya')) return { initials: 'AW', bg: 'bg-sky-100 text-sky-800 border-sky-200' };
-                if (n.includes('aarush')) return { initials: 'AL', bg: 'bg-amber-100 text-amber-800 border-amber-200' };
-                return { initials: (name || 'U').slice(0, 2).toUpperCase(), bg: 'bg-slate-100 text-slate-800 border-slate-200' };
-              };
-              const sender = getSenderMeta(msg.sender_name);
-
-              return (
-                <div key={msg.id || index} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : 'flex-row'} items-start`}>
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border shrink-0 mt-0.5 shadow-2xs ${sender.bg}`}
-                    title={msg.sender_name}
-                  >
-                    {sender.initials}
-                  </div>
-                  <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
-                    <div className="flex items-center gap-1.5 mb-1 px-1">
-                      <span className="text-[11px] font-semibold text-black/75">{msg.sender_name}</span>
-                      <span className="text-[10px] text-black/40">
-                        {msg.created_at
-                          ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : ''}
-                      </span>
-                    </div>
-                    <div
-                      className={`rounded-2xl px-4 py-2.5 text-xs leading-relaxed shadow-2xs transition-all ${
-                        isMe
-                          ? 'bg-slate-900 text-white rounded-tr-xs font-normal shadow-xs'
-                          : 'bg-white border border-hairline text-slate-900 rounded-tl-xs'
-                      }`}
-                    >
-                      {msg.text}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Quick Discussion Prompt Chips for Active Monitoring */}
-          {currentUser && (
-            <div className="px-3 pt-2 pb-1.5 bg-white border-t border-hairline/60 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px]">
-              <span className="caption-mono text-[10px] text-black/40 font-bold shrink-0 mr-1">DISCUSS:</span>
-              {[
-                { label: 'Check Budget Target', prompt: "What is our per-person budget target, and are we within limits?" },
-                { label: 'Suggest Best Dates', prompt: "Suggest optimal dates and flight timings for our trip." },
-                { label: 'Check Heritage Tickets', prompt: "Check ASI heritage monument entry tickets and slot availability." },
-                { label: 'Quorum Split Math', prompt: "@copilot compute the fair double-entry split and quorum consensus." },
-                { label: 'Reserve Sunset Batch', prompt: "Let's secure the Virupaksha sunset timed batch for all travelers." },
-              ].map((chip) => (
-                <button
-                  key={chip.label}
-                  type="button"
-                  onClick={() => handleSendMessage(null, chip.prompt)}
-                  className="whitespace-nowrap px-3 py-1 rounded-pill bg-surface-soft hover:bg-hairline hover:text-black border border-hairline text-black/70 text-xs transition-colors cursor-pointer shrink-0 font-medium"
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Chat Input Bar or Authentication Lock */}
-          {currentUser ? (
-            <form onSubmit={handleSendMessage} className="p-3 border-t border-hairline bg-white flex items-center gap-2">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ask a question, propose places, or discuss budget (Copilot is monitoring)..."
-                className="flex-1 bg-surface-soft border border-hairline rounded-pill px-4 py-2.5 text-xs text-black focus:outline-none focus:ring-1 focus:ring-black transition-all"
-              />
-              <button
-                type="submit"
-                disabled={sending || !inputText.trim()}
-                className="w-9 h-9 rounded-full bg-slate-900 hover:bg-black text-white flex items-center justify-center shrink-0 disabled:opacity-40 active:scale-95 transition-all shadow-xs cursor-pointer"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </form>
-          ) : (
-            <div className="p-4 border-t border-hairline bg-white flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-sky-50 border border-sky-200 text-sky-700 flex items-center justify-center shrink-0">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-black block">Sign in required to chat</span>
-                  <span className="text-[11px] text-black/50">Log in to collaborate on destination ideas and budget targets</span>
-                </div>
-              </div>
+            {convDetail.trip_id && onNavigateTab && (
               <button
                 type="button"
-                onClick={onOpenAuth}
-                className="inline-flex items-center justify-center gap-1.5 bg-sky-100 hover:bg-sky-200 text-sky-900 border border-sky-300 font-semibold rounded-pill text-xs py-2 px-5 whitespace-nowrap active:scale-95 transition-all shadow-xs"
+                onClick={() => onNavigateTab('itinerary', convDetail.trip_id)}
+                className="px-3 py-1 rounded-pill bg-black text-white hover:bg-black/85 text-xs font-semibold flex items-center gap-1"
               >
-                Sign in to Chat
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Open Plan</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {(errorMsg || noticeMsg || realtimeStatus === 'reconnecting') && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {errorMsg && (
+            <div className="flex-1 px-3 py-2 text-xs font-medium bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center justify-between">
+              <span>{errorMsg}</span>
+              <button
+                type="button"
+                onClick={() => setErrorMsg('')}
+                className="ml-3 font-bold underline"
+              >
+                Dismiss
               </button>
             </div>
           )}
+          {noticeMsg && !errorMsg && (
+            <div className="px-3 py-1.5 text-xs font-semibold bg-block-lime border border-hairline text-black rounded-xl">
+              {noticeMsg}
+            </div>
+          )}
+          {realtimeStatus === 'reconnecting' && (
+            <div className="px-3 py-1.5 text-xs bg-surface-soft border border-hairline text-black/70 rounded-xl flex items-center gap-1.5">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              <span>Reconnecting live sync...</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="bg-white border border-hairline rounded-2xl overflow-hidden flex h-[calc(100vh-230px)] min-h-[540px] max-h-[820px]">
+        {/* Left: Conversation List */}
+        <div className={`${mobileShowChat ? 'hidden md:flex' : 'flex'} w-full md:w-auto h-full`}>
+          <ConversationSidebar
+            conversations={conversations}
+            activeConversationId={activeConvId}
+            onSelectConversation={handleSelectConversation}
+            onOpenNewModal={() => setShowNewModal(true)}
+            onOpenInvitesModal={() => setShowInvitesModal(true)}
+            pendingInviteCount={myInvitations.length}
+          />
         </div>
 
-        {/* Right Column: Live Plan & Budget Snapshot (Reacts to Chat) */}
-        <div className="lg:col-span-5 space-y-4">
-          {/* Segmented View Switcher */}
-          <div className="bg-surface-soft border border-hairline rounded-2xl p-1.5 flex gap-1 shadow-2xs">
-            <button
-              onClick={() => setActiveTab('plan')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all duration-200 ease-out active:scale-95 ${
-                activeTab === 'plan' ? 'bg-white text-black font-semibold shadow-xs border border-hairline scale-[1.01]' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
-              }`}
-            >
-              <Calendar className={`w-3.5 h-3.5 transition-colors duration-200 ${activeTab === 'plan' ? 'text-blue-600' : 'text-black/40'}`} /> Plan & Schedule
-            </button>
-            <button
-              onClick={() => setActiveTab('tickets')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all duration-200 ease-out active:scale-95 ${
-                activeTab === 'tickets' ? 'bg-white text-black font-semibold shadow-xs border border-hairline scale-[1.01]' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
-              }`}
-            >
-              <Ticket className={`w-3.5 h-3.5 transition-colors duration-200 ${activeTab === 'tickets' ? 'text-amber-600' : 'text-black/40'}`} /> Tickets
-            </button>
-            <button
-              onClick={() => setActiveTab('budget')}
-              className={`flex-1 py-2 text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-all duration-200 ease-out active:scale-95 ${
-                activeTab === 'budget' ? 'bg-white text-black font-semibold shadow-xs border border-hairline scale-[1.01]' : 'text-black/60 hover:text-black hover:bg-white/40 border border-transparent'
-              }`}
-            >
-              <Coins className={`w-3.5 h-3.5 transition-colors duration-200 ${activeTab === 'budget' ? 'text-emerald-600' : 'text-black/40'}`} /> Budget & Split
-            </button>
-          </div>
-
-          <div key={activeTab} className="animate-tab-shift">
-            {/* TAB 1: Plan & Schedule */}
-          {activeTab === 'plan' && (
-            <div className="bg-white border border-hairline rounded-2xl p-5 space-y-4 shadow-xs">
-              <div className="flex items-center justify-between pb-3 border-b border-hairline">
-                <div>
-                  <h3 className="text-sm font-bold text-black">Generated Itinerary</h3>
-                  <p className="text-xs text-black/50">
-                    {primaryItin ? `Version #${primaryItin.version} (${primaryItin.status})` : 'No plan drafted yet'}
-                  </p>
-                </div>
-                {primaryProposal && (
-                  <span className="text-xs px-2.5 py-1 rounded-pill font-mono bg-block-cream font-medium text-black border border-black/10">
-                    Quorum: {primaryProposal.approval_pct}%
-                  </span>
-                )}
-              </div>
-
-              {/* Total Cost Highlight Card */}
-              <div className="p-4 rounded-xl bg-surface-soft border border-hairline flex items-center justify-between">
-                <div>
-                  <span className="caption-mono block text-black/50">ESTIMATED PER-PERSON</span>
-                  <span className="text-2xl font-bold font-mono text-black">₹{costPerPerson.toLocaleString()}</span>
-                </div>
-                <div className="text-right">
-                  <span className="caption-mono block text-black/50">TOTAL GROUP COST</span>
-                  <span className="text-sm font-bold font-mono text-black/70">₹{totalCost.toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* Legs Timeline */}
-              <div className="space-y-2.5">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-black/40 block">
-                  Scheduled Places & Legs ({legs.length})
-                </span>
-
-                {legs.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-black/40 border border-dashed border-hairline rounded-xl">
-                    No scheduled legs yet. Click <strong>Synthesize Plan</strong> in the chat to auto-generate!
-                  </div>
-                ) : (
-                  legs.map((leg) => (
-                    <div key={leg.leg_id} className="rounded-xl bg-surface-soft p-3 border border-hairline space-y-1.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-pill bg-white text-black/70 border border-hairline font-semibold">
-                            {leg.kind}
-                          </span>
-                          <h4 className="text-xs font-bold text-black pt-1">{leg.title}</h4>
-                        </div>
-                        <span className="font-mono text-xs font-semibold text-black">
-                          ₹{Number(leg.est_cost_inr).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px] text-black/50 pt-1">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-black/40" />
-                          {leg.span_start
-                            ? new Date(leg.span_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                            : ''}{' '}
-                          –{' '}
-                          {leg.span_end
-                            ? new Date(leg.span_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                            : ''}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Users className="w-3 h-3 text-black/40" /> {leg.participants?.length || memberCount} Travelers
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Quorum Approval Call-to-Action */}
-              {primaryProposal && (
-                <div className="pt-3 border-t border-hairline space-y-2.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-black">Group Approval Progress</span>
-                    <span className="font-mono font-bold text-black">
-                      {currentApprovals} of {totalVoters} votes ({currentApprovalPct}%) · {quorumRequiredPct}% required
-                    </span>
-                  </div>
-                  <div className="w-full bg-surface-soft h-2 rounded-full overflow-hidden border border-hairline">
-                    <div
-                      className={`h-full transition-all duration-500 rounded-full ${
-                        isQuorumMet ? 'bg-semantic-success' : 'bg-amber-500'
-                      }`}
-                      style={{ width: `${Math.min(100, Math.max(0, currentApprovalPct))}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      onClick={() => handleVote(primaryProposal.proposal_id, 'APPROVE')}
-                      className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-xs"
-                    >
-                      <Check className="w-3.5 h-3.5" /> Approve Proposal
-                    </button>
-                    <button
-                      onClick={() => handleVote(primaryProposal.proposal_id, 'REJECT')}
-                      className="py-2 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-semibold text-xs active:scale-95 transition-all flex items-center gap-1"
-                    >
-                      <X className="w-3.5 h-3.5" /> Reject
-                    </button>
-                  </div>
-                  <button
-                    onClick={handlePayItineraryWithRazorpay}
-                    className="w-full mt-2.5 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-sm cursor-pointer"
-                  >
-                    <CreditCard className="w-3.5 h-3.5" /> Pay Package with Razorpay (₹{(totalCost || 18400).toLocaleString()})
-                  </button>
-                </div>
-              )}
-
-              {/* Logged Group Expenses */}
-              {finances?.expenses?.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-hairline">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-black/40 block">
-                      Recorded Group Expenses ({finances.expenses.length})
-                    </span>
-                    <button
-                      onClick={() => setAddExpenseOpen(true)}
-                      className="text-[11px] font-bold text-sky-700 hover:text-sky-800 flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" /> Add Expense
-                    </button>
-                  </div>
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {finances.expenses.map((exp) => (
-                      <div
-                        key={exp.expense_id}
-                        className="rounded-xl bg-surface-soft p-2.5 border border-hairline flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <span className="font-semibold text-black block">{exp.description}</span>
-                          <span className="text-[10px] text-black/50 font-mono">Paid by {exp.payer_name} · Equal Split</span>
-                        </div>
-                        <span className="font-mono font-bold text-black">₹{Number(exp.amount).toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Quick Add Expense Action if no expenses yet */}
-              {(!finances?.expenses || finances.expenses.length === 0) && (
-                <div className="pt-2 border-t border-hairline">
-                  <button
-                    onClick={() => setAddExpenseOpen(true)}
-                    className="btn-secondary w-full text-xs py-2 flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Record Group Expense
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 2: Tickets & Capacity */}
-          {activeTab === 'tickets' && (
-            <div className="bg-white border border-hairline rounded-2xl p-5 space-y-4 shadow-xs">
-              <div>
-                <h3 className="text-sm font-bold text-black">Verified Heritage Tickets</h3>
-                <p className="text-xs text-black/50">Regulated capacity tickets from official site operators</p>
-              </div>
-
-              <div className="space-y-2.5 max-h-[560px] overflow-y-auto pr-1">
-                {(slots || []).map((slot) => {
-                  const seatsLeft = slot.seats_remaining ?? slot.capacity_total - slot.seats_taken;
-                  const isLow = seatsLeft <= 5;
-                  return (
-                    <div key={slot.slot_id} className="rounded-xl bg-surface-soft p-3.5 border border-hairline space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <span className="text-[10px] font-mono uppercase text-black/50 block">{slot.city}</span>
-                          <h4 className="text-xs font-bold text-black">{slot.poi_name}</h4>
-                          <p className="text-[11px] text-black/70">{slot.circuit}</p>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-mono text-sm font-bold text-black">
-                            ₹{Number(slot.price_inr).toLocaleString()}
-                          </span>
-                          <span className="text-[10px] text-black/40 block">per ticket</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs pt-1 border-t border-hairline">
-                        <span
-                          className={`inline-flex items-center gap-1 font-mono text-[11px] ${
-                            isLow ? 'text-rose-600 font-bold' : 'text-semantic-success font-medium'
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${isLow ? 'bg-rose-500 animate-ping' : 'bg-semantic-success'}`}
-                          ></span>
-                          {seatsLeft} / {slot.capacity_total} seats remaining
-                        </span>
-                        <span className="text-[10px] text-black/40">
-                          {slot.window_start
-                            ? new Date(slot.window_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                            : ''}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => handleBuySlotWithRazorpay(slot)}
-                        className="w-full mt-2 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
-                      >
-                        <CreditCard className="w-3.5 h-3.5" /> Buy Ticket with Razorpay (₹{Number(slot.price_inr).toLocaleString()})
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: Budget & Split */}
-          {activeTab === 'budget' && (
-            <div className="bg-white border border-hairline rounded-2xl p-5 space-y-4 shadow-xs">
-              <div>
-                <h3 className="text-sm font-bold text-black">Group Budget & Fair Splitting</h3>
-                <p className="text-xs text-black/50">Fair double-entry balance and settlement ledger</p>
-              </div>
-
-              {/* Member Ceiling comparison */}
-              <div className="space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-black/40 block">
-                  Member Budget Ceilings
-                </span>
-                {(tripDetail?.members || []).map((m) => (
-                  <div key={m.user_id} className="rounded-xl bg-surface-soft p-3 border border-hairline flex items-center justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-black block">{m.full_name}</span>
-                      <span className="text-[11px] text-black/50">Joining from {m.joining_city}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="font-mono text-xs font-bold text-black">
-                        ₹{Number(m.budget_ceiling).toLocaleString()}
-                      </span>
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-pill inline-block mt-0.5 border ${
-                          costPerPerson <= m.budget_ceiling
-                            ? 'bg-block-mint text-emerald-950 border-emerald-300'
-                            : 'bg-block-pink text-rose-950 border-rose-300'
-                        }`}
-                      >
-                        {costPerPerson <= m.budget_ceiling ? 'Within Ceiling' : 'Exceeds Ceiling'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Settlements & Balances */}
-              {finances?.settlements?.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-hairline">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-black/40 block">
-                    Settlements (Who Owes Whom)
-                  </span>
-                  {finances.settlements.map((s, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-xl bg-block-cream/60 border border-block-cream p-2.5 flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center gap-1.5 text-black">
-                        <span className="font-semibold">{s.from_name}</span>
-                        <ArrowRight className="w-3.5 h-3.5 text-black/40" />
-                        <span className="font-semibold">{s.to_name}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-black">₹{Number(s.amount_inr).toLocaleString()}</span>
-                        <button
-                          onClick={() => {
-                            openRazorpayCheckout({
-                              amountInr: Number(s.amount_inr),
-                              title: `Split Settlement: ${s.from_name} to ${s.to_name}`,
-                              description: `Trip #${activeTripId} Debt Clearance`,
-                              customerName: s.from_name,
-                              onSuccess: async (paymentDetails) => {
-                                try {
-                                  await settleSplitTransfer(activeTripId, s, paymentDetails);
-                                  notify('success', `Settlement ₹${Number(s.amount_inr).toLocaleString()} cleared (${paymentDetails.payment_id}). Ledger balance updated!`);
-                                } catch (err) {
-                                  notify('error', err.message || 'Could not record settlement in ledger.');
-                                }
-                                if (onRefresh) onRefresh(activeTripId);
-                              },
-                              onFailure: (err) => {
-                                notify('error', `Settlement declined: ${err.description || 'Simulated decline'}`);
-                              },
-                            });
-                          }}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[11px] py-1 px-2.5 rounded-pill flex items-center gap-1 transition-all shadow-xs active:scale-95 cursor-pointer"
-                        >
-                          <CreditCard className="w-3 h-3" /> Settle
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Logged Group Expenses */}
-              {finances?.expenses?.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-hairline">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-black/40 block">
-                      Recorded Group Expenses ({finances.expenses.length})
-                    </span>
-                    <button
-                      onClick={() => setAddExpenseOpen(true)}
-                      className="text-[11px] font-bold text-sky-700 hover:text-sky-800 flex items-center gap-1 cursor-pointer"
-                    >
-                      <Plus className="w-3 h-3" /> Add Expense
-                    </button>
-                  </div>
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                    {finances.expenses.map((exp) => (
-                      <div
-                        key={exp.expense_id}
-                        className="rounded-xl bg-surface-soft p-2.5 border border-hairline flex items-center justify-between text-xs"
-                      >
-                        <div>
-                          <span className="font-semibold text-black block">{exp.description}</span>
-                          <span className="text-[10px] text-black/50 font-mono">Paid by {exp.payer_name} · Equal Split</span>
-                        </div>
-                        <span className="font-mono font-bold text-black">₹{Number(exp.amount).toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Quick Add Expense Action if no expenses yet */}
-              {(!finances?.expenses || finances.expenses.length === 0) && (
-                <div className="pt-2 border-t border-hairline">
-                  <button
-                    onClick={() => setAddExpenseOpen(true)}
-                    className="btn-secondary w-full text-xs py-2 flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Record Group Expense
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          </div>
+        {/* Center: Main Group Discussion */}
+        <div className={`${mobileShowChat ? 'flex' : 'hidden md:flex'} flex-1 min-w-0 h-full`}>
+          <ChatWindow
+            conversation={convDetail}
+            members={members}
+            messages={messages}
+            openTaskCount={openTaskCount}
+            currentUserId={currentUserId}
+            onlineUserIds={onlineUserIds}
+            typingUsers={activeTypingNames}
+            myMembership={myMembership}
+            searchQuery={searchQuery}
+            onlyPinned={onlyPinned}
+            onlyBookmarked={onlyBookmarked}
+            threadRootId={threadRootId}
+            activeDrawerTab={drawerTab}
+            onBackMobile={() => setMobileShowChat(false)}
+            onSearchChange={setSearchQuery}
+            onToggleOnlyPinned={() => setOnlyPinned((v) => !v)}
+            onToggleOnlyBookmarked={() => setOnlyBookmarked((v) => !v)}
+            onSetThreadRootId={setThreadRootId}
+            onOpenDrawerTab={(tab) => setDrawerTab((prev) => (prev === tab ? null : tab))}
+            onSendMessage={handleSendMessage}
+            onEditMessage={handleEditMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onTogglePin={handleTogglePin}
+            onToggleBookmark={handleToggleBookmark}
+            onForwardMessage={(msg) => setForwardMsg(msg)}
+            onTypingChange={(isTyping) => {
+              if (activeConvId) liveClientRef.current?.sendTyping(activeConvId, isTyping);
+            }}
+            onFocusTask={(taskId) => {
+              setFocusedTaskId(taskId);
+              setDrawerTab('TASKS');
+            }}
+          />
         </div>
+
+        {/* Right: Tasks or Group Panel (opens on demand) */}
+        {drawerTab && convDetail && (
+          <div className="hidden lg:flex h-full">
+            <ContextDrawer
+              activeTab={drawerTab}
+              newTaskTrigger={newTaskTrigger}
+              conversation={convDetail}
+              members={members}
+              myMembership={myMembership}
+              tasks={tasks}
+              groupInvitations={groupInvitations}
+              platformUsers={platformUsers}
+              onlineUserIds={onlineUserIds}
+              focusedTaskId={focusedTaskId}
+              onClose={() => setDrawerTab(null)}
+              onTabChange={setDrawerTab}
+              onJumpToMessage={(msgId) => {
+                const el = document.getElementById(`msg-${msgId}`);
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  el.classList.add('ring-2', 'ring-black');
+                  setTimeout(() => el.classList.remove('ring-2', 'ring-black'), 1400);
+                }
+              }}
+              onRefreshConversation={() => {
+                loadConversationData(activeConvId);
+                loadBootstrap(activeConvId);
+              }}
+              onRefreshTasks={() =>
+                chatApi.listTasks(activeConvId).then((r) => setTasks(r.tasks || []))
+              }
+              onRefreshInvitations={() =>
+                chatApi
+                  .listGroupInvitations(activeConvId)
+                  .then((r) => setGroupInvitations(r.invitations || []))
+              }
+              onError={showError}
+              onSuccessNotice={showNotice}
+              onItinerarySynced={(tid, leg) => {
+                onItinerarySynced?.(tid, leg);
+                onRefresh?.(tid);
+              }}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Add Traveler to Trip Modal */}
-      {addMemberOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-hairline shadow-2xl p-6 relative">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-hairline">
-              <div>
-                <span className="eyebrow-mono text-black/50 block">TRIP ROSTER MANAGEMENT</span>
-                <h3 className="text-base font-bold text-black tracking-tight mt-0.5">
-                  Add Traveler to Trip
-                </h3>
-              </div>
-              <button
-                onClick={() => setAddMemberOpen(false)}
-                className="w-8 h-8 rounded-full bg-surface-soft hover:bg-hairline flex items-center justify-center text-black/60 hover:text-black transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddMember} className="space-y-4">
-              <div>
-                <label className="caption-mono block mb-1">Select Registered Traveler</label>
-                <select
-                  required
-                  value={selectedUserId}
-                  onChange={(e) => {
-                    const uid = e.target.value;
-                    setSelectedUserId(uid);
-                    const pool = (allUsers && allUsers.length > 0 ? allUsers : [
-                      { user_id: 4, full_name: 'Priya Sharma', email: 'priya@yatra.local', home_city: 'Pune' },
-                      { user_id: 5, full_name: 'Rohan Gupta', email: 'rohan@yatra.local', home_city: 'Jaipur' },
-                      { user_id: 6, full_name: 'Ananya Iyer', email: 'ananya@yatra.local', home_city: 'Chennai' },
-                      { user_id: 7, full_name: 'Vikram Malhotra', email: 'vikram@yatra.local', home_city: 'Hyderabad' },
-                    ]);
-                    const found = pool.find((u) => String(u.user_id) === String(uid));
-                    if (found?.home_city) setNewMemberCity(found.home_city);
-                  }}
-                  className="field-input text-xs"
-                >
-                  <option value="">-- Choose a registered user --</option>
-                  {(() => {
-                    const pool = (allUsers && allUsers.length > 0 ? allUsers : [
-                      { user_id: 4, full_name: 'Priya Sharma', email: 'priya@yatra.local', home_city: 'Pune' },
-                      { user_id: 5, full_name: 'Rohan Gupta', email: 'rohan@yatra.local', home_city: 'Jaipur' },
-                      { user_id: 6, full_name: 'Ananya Iyer', email: 'ananya@yatra.local', home_city: 'Chennai' },
-                      { user_id: 7, full_name: 'Vikram Malhotra', email: 'vikram@yatra.local', home_city: 'Hyderabad' },
-                    ]);
-                    const candidates = pool.filter((u) => !(tripDetail?.members || []).some((m) => Number(m.user_id) === Number(u.user_id)));
-                    if (candidates.length === 0) {
-                      return (
-                        <option value="4">Priya Sharma (priya@yatra.local) · Pune</option>
-                      );
-                    }
-                    return candidates.map((u) => (
-                      <option key={u.user_id} value={u.user_id}>
-                        {u.full_name} ({u.email}) · {u.home_city || 'India'}
-                      </option>
-                    ));
-                  })()}
-                </select>
-                <p className="text-[11px] text-black/40 mt-1">
-                  Only travelers not currently in this trip are shown.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="caption-mono block mb-1">Departure / Joining City</label>
-                  <input
-                    type="text"
-                    required
-                    value={newMemberCity}
-                    onChange={(e) => setNewMemberCity(e.target.value)}
-                    placeholder="e.g. Bengaluru"
-                    className="field-input text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="caption-mono block mb-1">Budget Ceiling (INR)</label>
-                  <input
-                    type="number"
-                    required
-                    min="1000"
-                    step="500"
-                    value={newMemberBudget}
-                    onChange={(e) => setNewMemberBudget(Number(e.target.value))}
-                    className="field-input text-xs font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="caption-mono block mb-1">Role in Group</label>
-                <select
-                  value={newMemberRole}
-                  onChange={(e) => setNewMemberRole(e.target.value)}
-                  className="field-input text-xs"
-                >
-                  <option value="MEMBER">Member (Voting & Split Participant)</option>
-                  <option value="ORGANIZER">Co-Organizer</option>
-                </select>
-              </div>
-
-              <div className="flex gap-2 pt-2 border-t border-hairline">
-                <button
-                  type="button"
-                  onClick={() => setAddMemberOpen(false)}
-                  className="btn-secondary flex-1 text-xs py-2"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={memberActionLoading || !selectedUserId}
-                  className="btn-primary flex-1 text-xs py-2 font-semibold"
-                >
-                  {memberActionLoading ? 'Adding...' : 'Add Traveler'}
-                </button>
-              </div>
-            </form>
+      {/* Tablet / Mobile Slide-Over Drawer */}
+      {drawerTab && convDetail && (
+        <div className="lg:hidden fixed inset-0 z-40 flex justify-end bg-black/40">
+          <div className="w-full max-w-sm h-full bg-white shadow-2xl">
+            <ContextDrawer
+              activeTab={drawerTab}
+              newTaskTrigger={newTaskTrigger}
+              conversation={convDetail}
+              members={members}
+              myMembership={myMembership}
+              tasks={tasks}
+              groupInvitations={groupInvitations}
+              platformUsers={platformUsers}
+              onlineUserIds={onlineUserIds}
+              focusedTaskId={focusedTaskId}
+              onClose={() => setDrawerTab(null)}
+              onTabChange={setDrawerTab}
+              onJumpToMessage={(msgId) => {
+                setDrawerTab(null);
+                setTimeout(() => {
+                  const el = document.getElementById(`msg-${msgId}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('ring-2', 'ring-black');
+                    setTimeout(() => el.classList.remove('ring-2', 'ring-black'), 1400);
+                  }
+                }, 80);
+              }}
+              onRefreshConversation={() => {
+                loadConversationData(activeConvId);
+                loadBootstrap(activeConvId);
+              }}
+              onRefreshTasks={() =>
+                chatApi.listTasks(activeConvId).then((r) => setTasks(r.tasks || []))
+              }
+              onRefreshInvitations={() =>
+                chatApi
+                  .listGroupInvitations(activeConvId)
+                  .then((r) => setGroupInvitations(r.invitations || []))
+              }
+              onError={showError}
+              onSuccessNotice={showNotice}
+              onItinerarySynced={(tid, leg) => {
+                onItinerarySynced?.(tid, leg);
+                onRefresh?.(tid);
+              }}
+            />
           </div>
         </div>
       )}
 
-      {/* Quick Add Expense Modal */}
-      {addExpenseOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-hairline shadow-2xl p-6 relative">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-hairline">
-              <div>
-                <span className="eyebrow-mono text-black/50 block">GROUP EXPENSE MANAGEMENT</span>
-                <h3 className="text-base font-bold text-black tracking-tight mt-0.5">
-                  Record Group Expense
-                </h3>
-              </div>
-              <button
-                onClick={() => setAddExpenseOpen(false)}
-                className="w-8 h-8 rounded-full bg-surface-soft hover:bg-hairline flex items-center justify-center text-black/60 hover:text-black transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* Modals */}
+      <NewConversationModal
+        open={showNewModal}
+        onClose={() => setShowNewModal(false)}
+        currentUserId={currentUserId}
+        platformUsers={platformUsers}
+        trips={trips}
+        onCreated={(conv) => {
+          loadBootstrap(conv?.conversation_id);
+          setMobileShowChat(true);
+        }}
+      />
 
-            <form onSubmit={handleAddExpense} className="space-y-4">
-              <div>
-                <label className="caption-mono block mb-1">Expense Description</label>
-                <input
-                  type="text"
-                  required
-                  value={expDesc}
-                  onChange={(e) => setExpDesc(e.target.value)}
-                  placeholder="e.g. Palolem Seafood Dinner, Taxi to Hampi, Entry Passes"
-                  className="field-input text-xs"
-                />
-              </div>
+      <InvitationsModal
+        open={showInvitesModal}
+        onClose={() => setShowInvitesModal(false)}
+        invitations={myInvitations}
+        onUpdated={(joinedConvId) => {
+          loadBootstrap(joinedConvId || activeConvId);
+          if (joinedConvId) setMobileShowChat(true);
+        }}
+      />
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="caption-mono block mb-1">Amount (INR)</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    step="0.01"
-                    value={expAmount}
-                    onChange={(e) => setExpAmount(e.target.value)}
-                    className="field-input text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="caption-mono block mb-1">Paid By</label>
-                  <select
-                    value={expPayerId || currentUser?.user_id || tripDetail?.members?.[0]?.user_id || ''}
-                    onChange={(e) => setExpPayerId(e.target.value)}
-                    className="field-input text-xs"
-                  >
-                    {(tripDetail?.members || []).map((m) => (
-                      <option key={m.user_id} value={m.user_id}>
-                        {m.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="text-[11px] text-black/60 bg-surface-soft p-3 rounded-xl border border-hairline font-mono space-y-1">
-                <div className="font-bold text-black">Balanced Ledger Policy:</div>
-                <div>
-                  Amount divided equally across {memberCount} active travelers (₹{(Number(expAmount || 0) / Math.max(1, memberCount)).toFixed(2)}/person).
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2 border-t border-hairline">
-                <button
-                  type="button"
-                  onClick={() => setAddExpenseOpen(false)}
-                  className="btn-secondary flex-1 text-xs py-2"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={expLoading || !expDesc.trim() || !expAmount}
-                  className="btn-primary flex-1 text-xs py-2 font-semibold"
-                >
-                  {expLoading ? 'Recording...' : 'Post Expense'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ForwardMessageModal
+        open={Boolean(forwardMsg)}
+        message={forwardMsg}
+        conversations={conversations}
+        onClose={() => setForwardMsg(null)}
+        onForwarded={(targetConvId) => {
+          showNotice('Message forwarded.');
+          if (targetConvId !== activeConvId) {
+            setActiveConvId(targetConvId);
+          }
+        }}
+      />
     </div>
   );
 }

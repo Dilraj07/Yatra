@@ -2,10 +2,8 @@ import React, { useState } from 'react';
 import { Sparkles, CalendarClock } from 'lucide-react';
 import { apiRequest } from '../api/client';
 
-export default function PlannerSection({ activeTripId, tripDetail, itineraries, slots, onRefresh, notify }) {
-  const [prompt, setPrompt] = useState('Plan a 3-day Goa & Hampi trip with Virupaksha heritage viewing under 25000 INR');
-  const [injectOverlap, setInjectOverlap] = useState(false);
-  const [aiTrace, setAiTrace] = useState(null);
+export default function PlannerSection({ activeTripId, tripDetail, itineraries, onRefresh, notify }) {
+  const [prompt, setPrompt] = useState('Plan a 3-day Goa & Hampi trip under 25000 INR');
   const [loading, setLoading] = useState(false);
 
   const [legTitle, setLegTitle] = useState('Palolem Beach Kayaking & Heritage Tour');
@@ -20,10 +18,9 @@ export default function PlannerSection({ activeTripId, tripDetail, itineraries, 
     try {
       const res = await apiRequest('/api/itineraries/ai-draft', {
         method: 'POST',
-        body: JSON.stringify({ trip_id: activeTripId, prompt, inject_overlap_test: injectOverlap }),
+        body: JSON.stringify({ trip_id: activeTripId, prompt, inject_overlap_test: false }),
       });
-      setAiTrace(res);
-      notify('success', `Drafted Itinerary v${res.itinerary.version} (${res.engine}).`);
+      notify('success', `Created Plan v${res.itinerary.version}.`);
       onRefresh(activeTripId);
     } catch (err) {
       notify('error', err.message, err.pgDetail);
@@ -48,7 +45,7 @@ export default function PlannerSection({ activeTripId, tripDetail, itineraries, 
           participant_ids: (tripDetail?.members || []).map((m) => m.user_id),
         }),
       });
-      notify('success', 'Leg added cleanly.');
+      notify('success', 'Activity added.');
       onRefresh(activeTripId);
     } catch (err) {
       notify('error', err.message, err.pgDetail);
@@ -61,7 +58,7 @@ export default function PlannerSection({ activeTripId, tripDetail, itineraries, 
         method: 'POST',
         body: JSON.stringify({ trip_id: activeTripId, itinerary_id: itineraryId }),
       });
-      notify('success', `Proposal opened for Itinerary #${itineraryId}.`);
+      notify('success', 'Shared with the group for approval.');
       onRefresh(activeTripId);
     } catch (err) {
       notify('error', err.message, err.pgDetail);
@@ -71,37 +68,17 @@ export default function PlannerSection({ activeTripId, tripDetail, itineraries, 
   return (
     <div className="color-block bg-block-lilac space-y-6">
       <div>
-        <span className="eyebrow-mono">AI ITINERARY GENERATOR</span>
-        <h2 className="display-lg mt-1">Draft plans with conflict-free scheduling.</h2>
+        <h2 className="display-lg">Itinerary</h2>
+        <p className="text-xs text-ink/70 mt-1">Generate a trip plan or add activities without schedule conflicts.</p>
       </div>
 
-      <div className="editorial-card space-y-4">
+      <div className="editorial-card">
         <form onSubmit={handleAiDraft} className="flex flex-col md:flex-row gap-3">
           <input className="field-input flex-1" value={prompt} onChange={(e) => setPrompt(e.target.value)} required />
           <button type="submit" disabled={loading} className="btn-magenta shrink-0">
-            <Sparkles className="w-4 h-4" /> {loading ? 'Drafting...' : 'Draft with AI'}
+            <Sparkles className="w-4 h-4" /> {loading ? 'Generating...' : 'Generate Plan'}
           </button>
         </form>
-        <label className="flex items-center gap-2 text-xs cursor-pointer">
-          <input type="checkbox" checked={injectOverlap} onChange={(e) => setInjectOverlap(e.target.checked)} className="accent-black" />
-          <span>Enable smart schedule conflict check</span>
-        </label>
-
-        {aiTrace && (
-          <div className="rounded-md bg-surface-soft p-3 space-y-1.5 font-mono text-xs">
-            {aiTrace.self_correction_trace.map((t, i) => {
-              const cleanStatus = (t.status || t.engine || '')
-                .replace('rejected_by_postgres', 'conflict_detected')
-                .replace('accepted_by_postgres', 'scheduled');
-              const cleanNote = (t.self_correction || t.title || '').replace(/GiST overlap/gi, 'schedule overlap');
-              return (
-                <div key={i} className={t.status === 'rejected_by_postgres' ? 'bg-block-pink p-1.5 rounded-xs' : 'p-1'}>
-                  <strong>[{t.step}]</strong> {cleanStatus} {cleanNote}
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -110,12 +87,12 @@ export default function PlannerSection({ activeTripId, tripDetail, itineraries, 
             <div key={it.itinerary_id} className="editorial-card space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-hairline-soft">
                 <div>
-                  <span className="caption-mono">ITINERARY #{it.itinerary_id} · v{it.version} · {it.status}</span>
+                  <span className="caption-mono">Plan v{it.version} · {it.status}</span>
                   <p className="text-sm font-medium">{it.summary}</p>
                 </div>
                 {it.status === 'DRAFT' && (
                   <button onClick={() => handleSendToVote(it.itinerary_id)} className="btn-primary text-xs py-1.5 px-4">
-                    Send to Vote
+                    Request Approval
                   </button>
                 )}
               </div>
@@ -130,7 +107,7 @@ export default function PlannerSection({ activeTripId, tripDetail, itineraries, 
                         {new Date(leg.span_start).toLocaleString()} → {new Date(leg.span_end).toLocaleTimeString()}
                       </div>
                     </div>
-                    <span className="font-mono font-medium">INR {Number(leg.est_cost_inr).toLocaleString()}</span>
+                    <span className="font-mono font-medium">₹{Number(leg.est_cost_inr).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
@@ -139,14 +116,14 @@ export default function PlannerSection({ activeTripId, tripDetail, itineraries, 
         </div>
 
         <div className="editorial-card space-y-3 h-fit">
-          <span className="caption-mono">QUICK ACTIVITY SCHEDULER</span>
-          <p className="text-xs">Adds an activity to the current plan. Overlapping time slots are automatically prevented.</p>
+          <span className="caption-mono">ADD ACTIVITY</span>
+          <p className="text-xs text-ink/70">Overlapping times are automatically blocked.</p>
           <form onSubmit={handleQuickLeg} className="space-y-2.5">
             <input className="field-input" value={legTitle} onChange={(e) => setLegTitle(e.target.value)} required />
             <input className="field-input" type="datetime-local" value={spanStart} onChange={(e) => setSpanStart(e.target.value)} required />
             <input className="field-input" type="datetime-local" value={spanEnd} onChange={(e) => setSpanEnd(e.target.value)} required />
             <input className="field-input" type="number" value={legCost} onChange={(e) => setLegCost(e.target.value)} />
-            <button type="submit" className="btn-primary w-full">Insert Leg</button>
+            <button type="submit" className="btn-primary w-full">Add Activity</button>
           </form>
         </div>
       </div>

@@ -1,427 +1,1136 @@
+import asyncio
+import logging
 import os
-import re
-import time
-from datetime import datetime, timezone
-from decimal import Decimal
+import uuid
+from pathlib import Path
 from typing import Any, Optional
 
-import httpx
-from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.core.config import settings
-from app.core.db import get_mongo_db, get_pg_conn
-from app.core.security import bearer_scheme, decode_access_token
-from app.schemas.chat import ChatAnalyzeRequest, ChatMessageIn
-from app.services import ai_planner
+from app.core.db import get_pg_conn
+from app.core.exceptions import ConflictError, DomainError, NotFoundError
+from app.core.security import decode_access_token, get_current_user
+from app.repositories import chat_repo, chat_task_repo, itinerary_repo
+from app.schemas.chat import (
+    AgentConfigUpdate,
+    ChatAnalyzeRequest,
+    ChatMemberAdd,
+    ChatMemberRoleUpdate,
+    ChatMessageIn,
+    ConversationCreate,
+    ConversationUpdate,
+    InvitationCreate,
+    InvitationRespond,
+    MessageCreate,
+    MessageUpdate,
+    ReadReceiptUpdate,
+    TaskAuthorizeRequest,
+    TaskCreate,
+    TaskUpdate,
+)
+from app.services import chat_agent_service, chat_permission_service
+from app.services.realtime_manager import realtime_manager
 
-router = APIRouter(prefix="/api/chat", tags=["Trip Discussion & AI Agent"])
+logger = logging.getLogger("yatra.chat_router")
 
+router = APIRouter(prefix="/api/chat", tags=["chat"])
+optional_bearer = HTTPBearer(auto_error=False)
 
-def _clean_for_mongo(val: Any) -> Any:
-    if isinstance(val, dict):
-        return {k: _clean_for_mongo(v) for k, v in val.items()}
-    elif isinstance(val, list):
-        return [_clean_for_mongo(v) for v in val]
-    elif isinstance(val, Decimal):
-        return float(val)
-    elif hasattr(val, "isoformat"):
-        return val.isoformat()
-    elif hasattr(val, "lower") and hasattr(val, "upper"):
-        return str(val)
-    return val
-
-
-def _get_optional_user(token_header):
-    if not token_header:
-        return None
-    try:
-        return decode_access_token(token_header.credentials)
-    except Exception:
-        return None
-
-
-def _format_msg(doc: dict[str, Any]) -> dict[str, Any]:
-    doc["id"] = str(doc.get("_id", ""))
-    if "_id" in doc:
-        del doc["_id"]
-    return doc
-
-
-def _seed_initial_trip_messages(trip_id: int) -> list[dict[str, Any]]:
-    mongo = None
-    try:
-        mongo = get_mongo_db()
-    except Exception:
-        pass
-
-    trip_row = None
-    members = []
-    try:
-        with get_pg_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT title, travel_window FROM trip WHERE trip_id = %s", (trip_id,))
-                trip_row = cur.fetchone()
-                cur.execute(
-                    "SELECT u.user_id, u.full_name, tm.role, tm.budget_ceiling "
-                    "FROM trip_member tm JOIN app_user u ON u.user_id = tm.user_id "
-                    "WHERE tm.trip_id = %s ORDER BY tm.role DESC, tm.user_id ASC",
-                    (trip_id,),
-                )
-                members = cur.fetchall()
-    except Exception:
-        from app.repositories.trip_repo import get_trip
-        t_data = get_trip(trip_id)
-        if t_data:
-            trip_row = {"title": t_data.get("title", "Goa & Hampi Winter Heritage 2026")}
-            members = t_data.get("members", [])
-
-    trip_title = trip_row["title"] if trip_row else "Group Trip"
-    organizer = members[0]["full_name"] if members else "Dilraj Singh"
-    org_id = members[0]["user_id"] if members else 1
-    m2 = members[1]["full_name"] if len(members) > 1 else "Arya Wadhwa"
-    m2_id = members[1]["user_id"] if len(members) > 1 else 2
-    m3 = members[2]["full_name"] if len(members) > 2 else "Aarush Luthra"
-    m3_id = members[2]["user_id"] if len(members) > 2 else 3
-
-    seed_messages = [
-        {
-            "trip_id": trip_id,
-            "sender_id": org_id,
-            "sender_name": organizer,
-            "is_agent": False,
-            "text": f"Welcome everyone to {trip_title}. Please discuss preferred places, timing, and budget targets here. Our AI Copilot will monitor the discussion and formulate the itinerary and budget splits.",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        },
-        {
-            "trip_id": trip_id,
-            "sender_id": m2_id,
-            "sender_name": m2,
-            "is_agent": False,
-            "text": "I would like to reserve the Taj Mahal Night Viewing batch on Dec 18. Let us make sure we secure tickets before the capacity limit is reached.",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        },
-        {
-            "trip_id": trip_id,
-            "sender_id": m3_id,
-            "sender_name": m3,
-            "is_agent": False,
-            "text": "Agreed. Let us also add Agra Fort on day 2. We should target keeping the per-person budget under ₹15,000.",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        },
-        {
-            "trip_id": trip_id,
-            "sender_id": 0,
-            "sender_name": "Yatra Copilot",
-            "is_agent": True,
-            "agent_badge": "AI Copilot",
-            "text": "Welcome to the trip planning hub. I am actively monitoring your conversation. When you are ready, select 'Synthesize Plan' and I will compute the itinerary schedule, budget breakdown with LaTeX equations, and seat allocations.",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        },
-    ]
-
-    for m in seed_messages:
-        mongo["trip_messages"].insert_one(m)
-
-    return [_format_msg(m) for m in seed_messages]
+UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "uploads" / "chat"
+MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024
 
 
-def _generate_openai_monitoring_response(trip_id: int, user_text: str, sender_name: str) -> Optional[str]:
-    if not settings.openai_api_key:
-        return None
-    transcript = ""
-    try:
-        mongo = get_mongo_db()
-        cursor = mongo["trip_messages"].find({"trip_id": trip_id}).sort("created_at", -1).limit(6)
-        recent_msgs = list(cursor)
-        recent_msgs.reverse()
-        transcript = "\n".join([f"{m.get('sender_name', 'Traveler')}: {m.get('text', '')}" for m in recent_msgs])
-    except Exception:
-        transcript = ""
+def _uid(current_user: dict[str, Any]) -> int:
+    return int(current_user.get("user_id") or current_user.get("sub"))
 
-    system_prompt = (
-        "You are 'Yatra Copilot', an AI travel assistant actively monitoring a group trip discussion for an Indian tourism platform. "
-        "Strict rules: "
-        "1. Strictly ZERO emojis anywhere in your response. "
-        "2. Do NOT mention any internal database or software architecture names (such as PostgreSQL, MongoDB, GiST, ACID, 2PC, Redis). "
-        "3. Keep your response concise (2 to 4 sentences). "
-        "4. Tone: helpful, analytical, focused on budgets, dates, attractions, flights, and consensus. "
-        "5. If mathematical or financial formulas are referenced, use LaTeX notation like $$\\sum c_i$$. "
-        "6. Begin with '**Yatra Copilot Active Monitor**\\n'."
+
+def _uname(current_user: dict[str, Any], member: dict[str, Any] | None = None) -> str:
+    return (
+        current_user.get("full_name")
+        or current_user.get("name")
+        or (member.get("full_name") if member else None)
+        or "Traveler"
     )
-    user_prompt = f"Recent group dialogue:\n{transcript}\n\nNew message from {sender_name}:\n\"{user_text}\"\n\nGenerate your monitoring response:"
 
-    headers = {
-        "Authorization": f"Bearer {settings.openai_api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": settings.openai_model or "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.3,
-        "max_tokens": 180,
-    }
-    try:
-        with httpx.Client(timeout=6.0) as client:
-            res = client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-            if res.status_code == 200:
-                reply = res.json()["choices"][0]["message"]["content"].strip()
-                # Ensure no emojis slip through
-                reply = re.sub(r"[\U00010000-\U0010ffff\u2600-\u27BF]", "", reply)
-                return reply
-    except Exception:
-        return None
-    return None
+
+def _require_conversation(conversation_id: int) -> dict[str, Any]:
+    conv = chat_repo.get_conversation(conversation_id)
+    if not conv:
+        raise NotFoundError("Conversation not found.")
+    return conv
+
+
+def _broadcast_members(conversation_id: int, event_type: str, payload: dict[str, Any]) -> None:
+    member_ids = chat_repo.get_member_user_ids(conversation_id)
+    realtime_manager.broadcast_to_users_sync(member_ids, event_type, payload)
 
 
 def _generate_agent_monitoring_response(trip_id: int, user_text: str, sender_name: str) -> Optional[str]:
-    # Check if OpenAI key is configured for live AI response (skip during automated test runs)
-    if settings.openai_api_key and not os.environ.get("PYTEST_CURRENT_TEST"):
-        ai_reply = _generate_openai_monitoring_response(trip_id, user_text, sender_name)
-        if ai_reply:
-            return ai_reply
-
-    text_lower = user_text.lower().strip()
-
-    # Case 1: Direct mention or summon of copilot / agent
-    if any(k in text_lower for k in ["@copilot", "@agent", "copilot", "yatra copilot"]):
-        if any(b in text_lower for b in ["budget", "cost", "price", "₹", "inr", "split"]):
-            return (
-                f"**Yatra Copilot Active Monitor**\n"
-                f"Analyzing budget query from {sender_name}: Group expenses and ledger settlement algorithms are actively tracking per-person contributions. "
-                f"Click **Synthesize Plan** at any time to recalibrate spending caps across all registered travelers."
-            )
-        if any(t in text_lower for t in ["ticket", "monument", "hampi", "taj", "entry", "slot"]):
-            return (
-                f"**Yatra Copilot Active Monitor**\n"
-                f"Checking ticket inventory for {sender_name}: Heritage monument slots and timed circuit batches are monitored in real time. "
-                f"Capacity limits and visitor caps are checked against your group size."
-            )
-        return (
-            f"**Yatra Copilot Active Monitor**\n"
-            f"Hello {sender_name}! I am continuously monitoring this discussion. When you and your fellow travelers agree on dates, locations, or budget limits, "
-            f"select **Synthesize Plan** and I will construct the complete itinerary."
-        )
-
-    # Case 2: Inquiries, constraints, and discussions
-    if any(q in text_lower for q in ["?", "budget", "cost", "ticket", "hotel", "flight", "weather", "date", "when", "how much", "split", "suggest"]):
-        if any(b in text_lower for b in ["budget", "cost", "₹", "split", "inr", "price"]):
-            return (
-                f"**Yatra Copilot Active Monitor**\n"
-                f"Traveler parameter logged: Budget target noted from {sender_name}. "
-                f"The financial ledger engine will balance individual shares $\\sum d_i = 0$ once proposals pass quorum."
-            )
-        if any(t in text_lower for t in ["ticket", "entry", "slot", "pass", "monument", "hampi", "agra"]):
-            return (
-                f"**Yatra Copilot Active Monitor**\n"
-                f"Inventory parameter logged: Heritage entry preference recorded from {sender_name}. "
-                f"Live capacity counters confirm availability for upcoming slots."
-            )
-        if any(w in text_lower for w in ["flight", "hotel", "weather", "radar", "stay"]):
-            return (
-                f"**Yatra Copilot Active Monitor**\n"
-                f"Telemetry parameter logged: Live Radar is tracking airspace movements and hotel availability for your trip window."
-            )
-        return (
-            f"**Yatra Copilot Active Monitor**\n"
-            f"Traveler inquiry noted from {sender_name}. Recorded in group session memory for next plan synthesis."
-        )
-
-    # Case 3: General discussion monitoring
-    return (
-        f"**Yatra Copilot Active Monitor**\n"
-        f"Traveler dialogue recorded from {sender_name}. Active monitoring maintains consensus alignment across all members."
+    """
+    Backwards-compatible active copilot helper tested by test_all_features.py and legacy /trip routes.
+    Queries PostgreSQL itineraries and trip budgets instead of MongoDB.
+    """
+    lower = (user_text or "").lower()
+    triggers = (
+        "@copilot",
+        "@agent",
+        "agent",
+        "budget",
+        "cost",
+        "ticket",
+        "asi",
+        "monument",
+        "heritage",
+        "hampi",
+        "plan",
+        "itinerary",
+        "schedule",
+        "task",
+        "assign",
+        "book",
+        "hotel",
+        "flight",
+        "split",
+        "expense",
+        "cancel",
+        "reschedule",
+        "approve",
+        "summary",
+        "summarize",
+        "?",
     )
+    if not any(tok in lower for tok in triggers):
+        return None
+
+    try:
+        itins = itinerary_repo.list_trip_itineraries(trip_id)
+    except Exception:
+        itins = []
+
+    active = itins[0] if itins else None
+    leg_count = len(active.get("legs") or []) if active else 0
+    lines = ["**Yatra Copilot Active Monitor**"]
+
+    if any(k in lower for k in ("budget", "cost", "price", "ceiling")):
+        ceilings: list[float] = []
+        try:
+            with get_pg_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT budget_ceiling FROM trip_member WHERE trip_id = %s AND budget_ceiling IS NOT NULL",
+                        (trip_id,),
+                    )
+                    ceilings = [float(r["budget_ceiling"]) for r in cur.fetchall()]
+        except Exception:
+            pass
+        if ceilings:
+            lines.append(
+                f"- Group **budget** ceiling for Trip #{trip_id}: INR {min(ceilings):,.0f} to INR {max(ceilings):,.0f} per person across {len(ceilings)} members."
+            )
+        else:
+            lines.append(f"- Noted **budget** question from **{sender_name}** for Trip #{trip_id}.")
+    elif any(k in lower for k in ("ticket", "asi", "monument", "heritage", "hampi", "slot")):
+        lines.append(
+            f"- Heritage & Monument **ticket** check requested by **{sender_name}**: open Heritage Tickets (or ask to schedule a timed slot) for Trip #{trip_id}."
+        )
+    elif any(k in lower for k in ("assign", "task", "schedule", "plan", "book", "reschedule", "cancel")):
+        lines.append(
+            f"- Detected operational action request from **{sender_name}**: prepared structured task proposal for Trip #{trip_id}."
+        )
+    elif any(k in lower for k in ("summary", "summarize")):
+        lines.append(f"- Active monitor ready for Trip #{trip_id} ({leg_count} scheduled itinerary legs).")
+    else:
+        lines.append(f"- Noted message from **{sender_name}** in Trip #{trip_id} context.")
+
+    if active:
+        lines.append(
+            f"- Current Itinerary **#{active['itinerary_id']}** ({active['status']}): {leg_count} legs synced in PostgreSQL."
+        )
+    else:
+        lines.append(f"- No active itinerary legs yet for Trip #{trip_id}. Open Itinerary Planner or confirm a scheduled task to add one.")
+    return "\n".join(lines)
+
+
+def _send_and_process_message(
+    *,
+    conversation: dict[str, Any],
+    sender_user_id: int,
+    sender_name: str,
+    body: str,
+    message_type: str = "TEXT",
+    reply_to_message_id: Optional[int] = None,
+    forwarded_from_message_id: Optional[int] = None,
+    mentions: list[int] | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    conv_id = int(conversation["conversation_id"])
+    clean_mentions = [int(x) for x in (mentions or []) if x]
+
+    if forwarded_from_message_id:
+        src = chat_repo.get_message(forwarded_from_message_id, sender_user_id)
+        if not src:
+            raise NotFoundError("Source message to forward was not found.")
+        src_member = chat_repo.get_member(int(src["conversation_id"]), sender_user_id)
+        chat_permission_service.require_membership(src_member)
+
+    if reply_to_message_id:
+        parent = chat_repo.get_message(reply_to_message_id, sender_user_id)
+        if not parent or int(parent["conversation_id"]) != conv_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Replied-to message must belong to the same conversation.",
+            )
+
+    msg = chat_repo.create_message(
+        conversation_id=conv_id,
+        sender_id=sender_user_id,
+        sender_name=sender_name,
+        sender_type="USER",
+        message_type=message_type,
+        body=body.strip(),
+        reply_to_message_id=reply_to_message_id,
+        forwarded_from_message_id=forwarded_from_message_id,
+        mentions=clean_mentions,
+        attachments=attachments or [],
+        viewer_user_id=sender_user_id,
+    )
+
+    member_ids = chat_repo.get_member_user_ids(conv_id)
+    realtime_manager.broadcast_to_users_sync(member_ids, "message_new", {"conversation_id": conv_id, "message": msg})
+
+    for mentioned_uid in clean_mentions:
+        if mentioned_uid != sender_user_id and mentioned_uid in member_ids:
+            notif = chat_task_repo.create_notification(
+                user_id=mentioned_uid,
+                conversation_id=conv_id,
+                message_id=int(msg["message_id"]),
+                kind="MENTION",
+                title=f"{sender_name} mentioned you in {conversation['title']}",
+                body=msg["body"][:160],
+            )
+            realtime_manager.broadcast_to_users_sync([mentioned_uid], "notification_new", {"notification": notif})
+
+    agent_res = chat_agent_service.process_incoming_message(
+        conversation=conversation,
+        message=msg,
+        sender_user_id=sender_user_id,
+        sender_name=sender_name,
+    )
+    if agent_res.get("proposed_task"):
+        pt = agent_res["proposed_task"]
+        realtime_manager.broadcast_to_users_sync(
+            member_ids,
+            "task_new",
+            {"conversation_id": conv_id, "task": pt},
+        )
+        if pt.get("assigned_to_user_id") and int(pt["assigned_to_user_id"]) != sender_user_id:
+            realtime_manager.broadcast_to_users_sync(
+                [int(pt["assigned_to_user_id"])],
+                "notification_refresh",
+                {"conversation_id": conv_id, "task_id": pt["task_id"]},
+            )
+    if agent_res.get("agent_message"):
+        realtime_manager.broadcast_to_users_sync(
+            member_ids,
+            "message_new",
+            {"conversation_id": conv_id, "message": agent_res["agent_message"]},
+        )
+
+    return {
+        "message": msg,
+        "agent_message": agent_res.get("agent_message"),
+        "proposed_task": agent_res.get("proposed_task"),
+        "audit": agent_res.get("audit"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Conversations & Group Creation / Settings
+# ---------------------------------------------------------------------------
+
+
+@router.get("/conversations")
+def list_conversations(current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    chat_repo.update_user_last_seen(uid)
+    return {
+        "conversations": chat_repo.list_user_conversations(uid),
+        "online_user_ids": realtime_manager.get_online_user_ids(),
+    }
+
+
+@router.post("/conversations", status_code=status.HTTP_201_CREATED)
+def create_conversation(payload: ConversationCreate, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    if payload.kind == "DIRECT":
+        if not payload.target_user_id or int(payload.target_user_id) == uid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Direct conversations require a valid target_user_id different from yourself.",
+            )
+        conv = chat_repo.get_or_create_direct_conversation(uid, int(payload.target_user_id))
+    else:
+        title = (payload.title or "").strip()
+        if not title:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Group title is required.")
+        conv = chat_repo.create_group_conversation(
+            creator_id=uid,
+            title=title,
+            description=payload.description,
+            avatar_url=payload.avatar_url,
+            trip_id=payload.trip_id,
+            member_ids=payload.member_ids,
+            agent_enabled=payload.agent_enabled,
+            agent_mode=payload.agent_mode,
+        )
+
+    member_ids = chat_repo.get_member_user_ids(int(conv["conversation_id"]))
+    realtime_manager.broadcast_to_users_sync(
+        member_ids,
+        "conversation_updated",
+        {"conversation_id": conv["conversation_id"]},
+    )
+    return {
+        "conversation": conv,
+        "members": chat_repo.list_members(int(conv["conversation_id"])),
+    }
+
+
+@router.get("/conversations/{conversation_id}")
+def get_conversation_detail(conversation_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    conv = _require_conversation(conversation_id)
+    member = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_membership(member)
+    return {
+        "conversation": conv,
+        "my_membership": member,
+        "members": chat_repo.list_members(conversation_id),
+        "online_user_ids": realtime_manager.get_online_user_ids(),
+    }
+
+
+@router.patch("/conversations/{conversation_id}")
+def update_conversation(
+    conversation_id: int,
+    payload: ConversationUpdate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    conv = _require_conversation(conversation_id)
+    if conv["kind"] == "DIRECT":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Direct messages do not have group settings.")
+    member = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_can_manage_members(member)
+
+    updated = chat_repo.update_conversation(
+        conversation_id,
+        uid,
+        title=payload.title,
+        description=payload.description,
+        avatar_url=payload.avatar_url,
+        retention_days=payload.retention_days,
+    )
+    _broadcast_members(conversation_id, "conversation_updated", {"conversation_id": conversation_id, "conversation": updated})
+    return {"conversation": updated}
+
+
+@router.patch("/conversations/{conversation_id}/agent")
+def configure_agent(
+    conversation_id: int,
+    payload: AgentConfigUpdate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    _require_conversation(conversation_id)
+    member = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_can_configure_agent(member)
+
+    effective_mode = "OFF" if not payload.agent_enabled else payload.agent_mode
+    updated = chat_repo.update_agent_config(conversation_id, uid, payload.agent_enabled, effective_mode)
+    audit = chat_task_repo.create_agent_audit(
+        conversation_id=conversation_id,
+        trigger_message_id=None,
+        agent_mode=effective_mode,
+        classification="GENERAL",
+        summary=f"Agent settings updated by {_uname(current_user, member)}: enabled={payload.agent_enabled}, mode={effective_mode}.",
+        action_taken="AGENT_CONFIG_UPDATED",
+        authorized_by_user_id=uid,
+    )
+    _broadcast_members(
+        conversation_id,
+        "agent_config_updated",
+        {"conversation_id": conversation_id, "agent_enabled": payload.agent_enabled, "agent_mode": effective_mode},
+    )
+    return {"conversation": updated, "audit": audit}
+
+
+# ---------------------------------------------------------------------------
+# Members, Roles & Membership History
+# ---------------------------------------------------------------------------
+
+
+@router.get("/conversations/{conversation_id}/members")
+def list_conversation_members(conversation_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    _require_conversation(conversation_id)
+    chat_permission_service.require_membership(chat_repo.get_member(conversation_id, uid))
+    return {
+        "members": chat_repo.list_members(conversation_id),
+        "online_user_ids": realtime_manager.get_online_user_ids(),
+    }
+
+
+@router.post("/conversations/{conversation_id}/members", status_code=status.HTTP_201_CREATED)
+def add_conversation_member(
+    conversation_id: int,
+    payload: ChatMemberAdd,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    conv = _require_conversation(conversation_id)
+    if conv["kind"] == "DIRECT":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot add members to a direct conversation.")
+    actor = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_can_manage_members(actor)
+
+    added = chat_repo.add_member(conversation_id, payload.user_id, payload.role, uid)
+    members = chat_repo.list_members(conversation_id)
+    _broadcast_members(conversation_id, "membership_updated", {"conversation_id": conversation_id, "members": members})
+
+    if int(payload.user_id) != uid:
+        notif = chat_task_repo.create_notification(
+            user_id=int(payload.user_id),
+            conversation_id=conversation_id,
+            kind="GROUP_ADDED",
+            title=f"Added to {conv['title']}",
+            body=f"{_uname(current_user, actor)} added you as {payload.role}.",
+        )
+        realtime_manager.broadcast_to_users_sync([int(payload.user_id)], "notification_new", {"notification": notif})
+
+    return {"member": added, "members": members}
+
+
+@router.patch("/conversations/{conversation_id}/members/{target_user_id}")
+def update_member_role_or_permissions(
+    conversation_id: int,
+    target_user_id: int,
+    payload: ChatMemberRoleUpdate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    _require_conversation(conversation_id)
+    actor = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_can_manage_members(actor)
+
+    target = chat_repo.get_member(conversation_id, target_user_id)
+    if not target:
+        raise NotFoundError("Target user is not a member of this conversation.")
+    chat_permission_service.validate_target_role_change(actor, target, payload.role)
+
+    updated = chat_repo.update_member_role(
+        conversation_id,
+        target_user_id,
+        uid,
+        role=payload.role,
+        can_send=payload.can_send,
+        can_manage_members=payload.can_manage_members,
+        can_configure_agent=payload.can_configure_agent,
+        muted=payload.muted,
+    )
+    members = chat_repo.list_members(conversation_id)
+    _broadcast_members(conversation_id, "membership_updated", {"conversation_id": conversation_id, "members": members})
+    return {"member": updated, "members": members}
+
+
+@router.delete("/conversations/{conversation_id}/members/{target_user_id}")
+def remove_or_leave_member(
+    conversation_id: int,
+    target_user_id: int,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    conv = _require_conversation(conversation_id)
+    if conv["kind"] == "DIRECT":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove members from a direct conversation.")
+    actor = chat_repo.get_member(conversation_id, uid)
+    target = chat_repo.get_member(conversation_id, target_user_id)
+    if not target:
+        raise NotFoundError("Target member was not found in this conversation.")
+
+    if int(target_user_id) == uid:
+        chat_permission_service.require_membership(actor)
+        if actor.get("role") == "OWNER":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Group Owner cannot leave without transferring ownership.",
+            )
+    else:
+        chat_permission_service.require_can_manage_members(actor)
+        chat_permission_service.validate_target_role_change(actor, target)
+
+    notify_ids = chat_repo.get_member_user_ids(conversation_id)
+    chat_repo.remove_member(conversation_id, target_user_id, uid)
+    members = chat_repo.list_members(conversation_id)
+    realtime_manager.broadcast_to_users_sync(
+        notify_ids,
+        "membership_updated",
+        {"conversation_id": conversation_id, "removed_user_id": target_user_id, "members": members},
+    )
+    return {"removed_user_id": target_user_id, "members": members}
+
+
+@router.get("/conversations/{conversation_id}/history")
+def list_membership_history(conversation_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    _require_conversation(conversation_id)
+    chat_permission_service.require_membership(chat_repo.get_member(conversation_id, uid))
+    return {"events": chat_repo.list_membership_events(conversation_id)}
+
+
+# ---------------------------------------------------------------------------
+# Invitations & Invite Codes
+# ---------------------------------------------------------------------------
+
+
+@router.get("/conversations/{conversation_id}/invitations")
+def list_group_invitations(conversation_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    _require_conversation(conversation_id)
+    chat_permission_service.require_can_manage_members(chat_repo.get_member(conversation_id, uid))
+    return {"invitations": chat_repo.list_conversation_invitations(conversation_id)}
+
+
+@router.post("/conversations/{conversation_id}/invitations", status_code=status.HTTP_201_CREATED)
+def create_group_invitation(
+    conversation_id: int,
+    payload: InvitationCreate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    conv = _require_conversation(conversation_id)
+    if conv["kind"] == "DIRECT":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot invite users into a direct chat.")
+    actor = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_can_manage_members(actor)
+
+    inv = chat_repo.create_invitation(
+        conversation_id,
+        uid,
+        invited_user_id=payload.invited_user_id,
+        role=payload.role,
+        max_uses=payload.max_uses,
+        expires_hours=payload.expires_hours,
+    )
+    if payload.invited_user_id and int(payload.invited_user_id) != uid:
+        notif = chat_task_repo.create_notification(
+            user_id=int(payload.invited_user_id),
+            conversation_id=conversation_id,
+            kind="GROUP_INVITE",
+            title=f"Group invite: {conv['title']}",
+            body=f"{_uname(current_user, actor)} invited you to join as {payload.role}. Code: {inv['invite_code']}",
+        )
+        realtime_manager.broadcast_to_users_sync(
+            [int(payload.invited_user_id)],
+            "invitation_new",
+            {"invitation": inv, "notification": notif},
+        )
+    return {"invitation": inv}
+
+
+@router.delete("/conversations/{conversation_id}/invitations/{invitation_id}")
+def revoke_group_invitation(
+    conversation_id: int,
+    invitation_id: int,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    _require_conversation(conversation_id)
+    chat_permission_service.require_can_manage_members(chat_repo.get_member(conversation_id, uid))
+    inv = chat_repo.get_invitation(invitation_id)
+    if not inv or int(inv["conversation_id"]) != int(conversation_id):
+        raise NotFoundError("Invitation not found in this conversation.")
+    revoked = chat_repo.revoke_invitation(invitation_id, uid)
+    return {"invitation": revoked}
+
+
+@router.get("/invitations")
+def list_my_invitations(current_user: dict[str, Any] = Depends(get_current_user)):
+    return {"invitations": chat_repo.list_user_invitations(_uid(current_user))}
+
+
+@router.post("/invitations/{invitation_id}/respond")
+def respond_to_invitation(
+    invitation_id: int,
+    payload: InvitationRespond,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    inv = chat_repo.get_invitation(invitation_id)
+    if not inv:
+        raise NotFoundError("Invitation not found.")
+    if inv.get("invited_user_id") and int(inv["invited_user_id"]) != uid:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This invitation belongs to another user.")
+
+    try:
+        res = chat_repo.respond_invitation(invitation_id, uid, payload.action)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if res.get("status") == "ACCEPTED":
+        conv_id = int(res["conversation_id"])
+        members = chat_repo.list_members(conv_id)
+        _broadcast_members(conv_id, "membership_updated", {"conversation_id": conv_id, "members": members})
+    return res
+
+
+@router.post("/invitations/code/{invite_code}/join")
+def join_by_invite_code(invite_code: str, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    inv = chat_repo.get_invitation_by_code(invite_code.strip())
+    if not inv:
+        raise NotFoundError("Invalid invite code.")
+    if inv.get("invited_user_id") and int(inv["invited_user_id"]) != uid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This invite code is assigned to a different platform user.",
+        )
+
+    try:
+        res = chat_repo.respond_invitation(int(inv["invitation_id"]), uid, "ACCEPT")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    conv_id = int(res["conversation_id"])
+    members = chat_repo.list_members(conv_id)
+    _broadcast_members(conv_id, "membership_updated", {"conversation_id": conv_id, "members": members})
+    return {**res, "conversation": chat_repo.get_conversation(conv_id), "members": members}
+
+
+# ---------------------------------------------------------------------------
+# Messages, Threading, Receipts, Pins, Bookmarks, Attachments
+# ---------------------------------------------------------------------------
+
+
+@router.get("/conversations/{conversation_id}/messages")
+def list_conversation_messages(
+    conversation_id: int,
+    after_id: Optional[int] = Query(default=None, ge=0),
+    before_id: Optional[int] = Query(default=None, gt=0),
+    search: Optional[str] = Query(default=None, max_length=200),
+    thread_root_id: Optional[int] = Query(default=None, gt=0),
+    only_pinned: bool = False,
+    only_bookmarked: bool = False,
+    limit: int = Query(default=100, ge=1, le=200),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    conv = _require_conversation(conversation_id)
+    member = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_membership(member)
+    chat_repo.update_user_last_seen(uid)
+
+    msgs = chat_repo.list_messages(
+        conversation_id,
+        uid,
+        after_id=after_id,
+        before_id=before_id,
+        search=search,
+        thread_root_id=thread_root_id,
+        only_pinned=only_pinned,
+        only_bookmarked=only_bookmarked,
+        limit=limit,
+    )
+    return {
+        "conversation": conv,
+        "messages": msgs,
+        "members": chat_repo.list_members(conversation_id),
+    }
+
+
+@router.post("/conversations/{conversation_id}/messages", status_code=status.HTTP_201_CREATED)
+def post_conversation_message(
+    conversation_id: int,
+    payload: MessageCreate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    conv = _require_conversation(conversation_id)
+    member = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_can_send(member)
+
+    return _send_and_process_message(
+        conversation=conv,
+        sender_user_id=uid,
+        sender_name=_uname(current_user, member),
+        body=payload.body,
+        message_type=payload.message_type,
+        reply_to_message_id=payload.reply_to_message_id,
+        forwarded_from_message_id=payload.forwarded_from_message_id,
+        mentions=payload.mentions,
+        attachments=payload.attachments,
+    )
+
+
+@router.patch("/messages/{message_id}")
+def edit_message(
+    message_id: int,
+    payload: MessageUpdate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    msg = chat_repo.get_message(message_id, uid)
+    if not msg:
+        raise NotFoundError("Message not found.")
+    conv_id = int(msg["conversation_id"])
+    member = chat_repo.get_member(conv_id, uid)
+    chat_permission_service.require_can_edit_message(member, msg, uid)
+
+    updated = chat_repo.edit_message(message_id, payload.body.strip(), uid)
+    _broadcast_members(conv_id, "message_updated", {"conversation_id": conv_id, "message": updated})
+    return {"message": updated}
+
+
+@router.delete("/messages/{message_id}")
+def delete_message(message_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    msg = chat_repo.get_message(message_id, uid)
+    if not msg:
+        raise NotFoundError("Message not found.")
+    conv_id = int(msg["conversation_id"])
+    member = chat_repo.get_member(conv_id, uid)
+    chat_permission_service.require_can_delete_message(member, msg, uid)
+
+    deleted = chat_repo.soft_delete_message(message_id, uid, uid)
+    _broadcast_members(conv_id, "message_deleted", {"conversation_id": conv_id, "message": deleted})
+    return {"message": deleted}
+
+
+@router.post("/conversations/{conversation_id}/read")
+def mark_conversation_read(
+    conversation_id: int,
+    payload: ReadReceiptUpdate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    _require_conversation(conversation_id)
+    member = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_membership(member)
+
+    updated_ids = chat_repo.mark_read_up_to(conversation_id, uid, payload.up_to_message_id)
+    _broadcast_members(
+        conversation_id,
+        "receipt_updated",
+        {
+            "conversation_id": conversation_id,
+            "user_id": uid,
+            "full_name": _uname(current_user, member),
+            "up_to_message_id": payload.up_to_message_id,
+            "message_ids": updated_ids,
+        },
+    )
+    return {"updated_message_ids": updated_ids}
+
+
+@router.post("/messages/{message_id}/pin")
+def pin_or_unpin_message(
+    message_id: int,
+    pin: Optional[bool] = Query(default=None),
+    body: Optional[dict[str, Any]] = Body(default=None),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    msg = chat_repo.get_message(message_id, uid)
+    if not msg:
+        raise NotFoundError("Message not found.")
+    conv_id = int(msg["conversation_id"])
+    member = chat_repo.get_member(conv_id, uid)
+    chat_permission_service.require_can_moderate(member)
+
+    if pin is None and isinstance(body, dict) and "pin" in body:
+        target_pin = bool(body["pin"])
+    elif pin is not None:
+        target_pin = pin
+    else:
+        target_pin = not bool(msg.get("is_pinned"))
+
+    chat_repo.set_pin(conv_id, message_id, uid, target_pin)
+    refreshed = chat_repo.get_message(message_id, uid)
+    _broadcast_members(
+        conv_id,
+        "message_pinned",
+        {"conversation_id": conv_id, "message_id": message_id, "is_pinned": target_pin, "message": refreshed},
+    )
+    return {"message_id": message_id, "is_pinned": target_pin, "message": refreshed}
+
+
+@router.delete("/messages/{message_id}/pin")
+def unpin_message(message_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    msg = chat_repo.get_message(message_id, uid)
+    if not msg:
+        raise NotFoundError("Message not found.")
+    conv_id = int(msg["conversation_id"])
+    member = chat_repo.get_member(conv_id, uid)
+    chat_permission_service.require_can_moderate(member)
+
+    chat_repo.set_pin(conv_id, message_id, uid, False)
+    refreshed = chat_repo.get_message(message_id, uid)
+    _broadcast_members(
+        conv_id,
+        "message_pinned",
+        {"conversation_id": conv_id, "message_id": message_id, "is_pinned": False, "message": refreshed},
+    )
+    return {"message_id": message_id, "is_pinned": False}
+
+
+@router.post("/messages/{message_id}/bookmark")
+def toggle_message_bookmark(message_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    msg = chat_repo.get_message(message_id, uid)
+    if not msg:
+        raise NotFoundError("Message not found.")
+    member = chat_repo.get_member(int(msg["conversation_id"]), uid)
+    chat_permission_service.require_membership(member)
+
+    bookmarked = chat_repo.toggle_bookmark(uid, message_id)
+    return {"message_id": message_id, "is_bookmarked": bookmarked}
+
+
+@router.post("/conversations/{conversation_id}/attachments", status_code=status.HTTP_201_CREATED)
+async def upload_attachment(
+    conversation_id: int,
+    file: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    _require_conversation(conversation_id)
+    member = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_can_send(member)
+
+    raw = await file.read()
+    if len(raw) > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Attachment exceeds 15 MB limit.",
+        )
+
+    safe_name = Path(file.filename or "attachment.bin").name or "attachment.bin"
+    conv_dir = UPLOAD_ROOT / str(conversation_id)
+    conv_dir.mkdir(parents=True, exist_ok=True)
+    disk_path = conv_dir / f"{uuid.uuid4().hex}_{safe_name}"
+    await asyncio.to_thread(disk_path.write_bytes, raw)
+
+    att = chat_repo.create_attachment(
+        conversation_id=conversation_id,
+        uploaded_by=uid,
+        file_name=safe_name,
+        content_type=file.content_type or "application/octet-stream",
+        size_bytes=len(raw),
+        storage_path=str(disk_path),
+    )
+    descriptor = {
+        "attachment_id": att["attachment_id"],
+        "file_name": att["file_name"],
+        "content_type": att["content_type"],
+        "size_bytes": att["size_bytes"],
+        "url": f"/api/chat/attachments/{att['attachment_id']}",
+    }
+    return {"attachment": descriptor}
+
+
+@router.get("/attachments/{attachment_id}")
+def download_attachment(
+    attachment_id: int,
+    token: Optional[str] = Query(default=None),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_bearer),
+):
+    raw_token = credentials.credentials if credentials else token
+    user = decode_access_token(raw_token or "")
+    uid = _uid(user)
+
+    att = chat_repo.get_attachment(attachment_id)
+    if not att:
+        raise NotFoundError("Attachment not found.")
+    member = chat_repo.get_member(int(att["conversation_id"]), uid)
+    chat_permission_service.require_membership(member)
+
+    path = Path(att["storage_path"])
+    if not path.is_file():
+        raise NotFoundError("Attachment file is no longer available on disk.")
+    return FileResponse(path, media_type=att["content_type"], filename=att["file_name"])
+
+
+# ---------------------------------------------------------------------------
+# AI Agent Operations, Audit & Summaries
+# ---------------------------------------------------------------------------
+
+
+@router.post("/conversations/{conversation_id}/agent/summarize")
+def summarize_conversation_endpoint(
+    conversation_id: int,
+    payload: Optional[ChatAnalyzeRequest] = Body(default=None),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    res = chat_agent_service.summarize_conversation(conversation_id, uid, post_to_chat=True)
+    if res.get("message"):
+        _broadcast_members(
+            conversation_id,
+            "message_new",
+            {"conversation_id": conversation_id, "message": res["message"]},
+        )
+    return res
+
+
+@router.get("/conversations/{conversation_id}/agent/audit")
+def list_agent_audit_endpoint(conversation_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    _require_conversation(conversation_id)
+    chat_permission_service.require_membership(chat_repo.get_member(conversation_id, uid))
+    return {"audit": chat_task_repo.list_agent_audit(conversation_id)}
+
+
+# ---------------------------------------------------------------------------
+# Operational Tasks & Planning Integration
+# ---------------------------------------------------------------------------
+
+
+@router.get("/conversations/{conversation_id}/tasks")
+def list_conversation_tasks(
+    conversation_id: int,
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    _require_conversation(conversation_id)
+    chat_permission_service.require_membership(chat_repo.get_member(conversation_id, uid))
+    return {"tasks": chat_task_repo.list_tasks(conversation_id, status=status_filter)}
+
+
+@router.post("/conversations/{conversation_id}/tasks", status_code=status.HTTP_201_CREATED)
+def create_conversation_task(
+    conversation_id: int,
+    payload: TaskCreate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    conv = _require_conversation(conversation_id)
+    member = chat_repo.get_member(conversation_id, uid)
+    chat_permission_service.require_can_send(member)
+
+    task = chat_task_repo.create_task(
+        conversation_id=conversation_id,
+        title=payload.title.strip(),
+        description=payload.description.strip(),
+        source_message_id=payload.source_message_id,
+        trip_id=conv.get("trip_id"),
+        itinerary_id=payload.itinerary_id,
+        linked_proposal_id=payload.linked_proposal_id,
+        assigned_to_user_id=payload.assigned_to_user_id,
+        assigned_to_agent=payload.assigned_to_agent,
+        created_by_user_id=uid,
+        proposed_by_agent=False,
+        priority=payload.priority,
+        status="TODO",
+        due_at=payload.due_at,
+        schedule_start=payload.schedule_start,
+        schedule_end=payload.schedule_end,
+        leg_kind=payload.leg_kind,
+        est_cost_inr=payload.est_cost_inr,
+        dependencies=payload.dependencies,
+        reminder_at=payload.reminder_at,
+        confirmed_by_user_id=uid,
+    )
+    _broadcast_members(conversation_id, "task_new", {"conversation_id": conversation_id, "task": task})
+
+    if payload.assigned_to_user_id and int(payload.assigned_to_user_id) != uid:
+        notif = chat_task_repo.create_notification(
+            user_id=int(payload.assigned_to_user_id),
+            conversation_id=conversation_id,
+            message_id=payload.source_message_id,
+            task_id=int(task["task_id"]),
+            kind="TASK_ASSIGNED",
+            title=f"New task assigned: {task['title']}",
+            body=f"Assigned by {_uname(current_user, member)} in {conv['title']}",
+        )
+        realtime_manager.broadcast_to_users_sync([int(payload.assigned_to_user_id)], "notification_new", {"notification": notif})
+
+    return {"task": task}
+
+
+@router.patch("/tasks/{task_id}")
+def update_task_endpoint(
+    task_id: int,
+    payload: TaskUpdate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    task = chat_task_repo.get_task(task_id)
+    if not task:
+        raise NotFoundError("Task not found.")
+    conv_id = int(task["conversation_id"])
+    member = chat_repo.get_member(conv_id, uid)
+    chat_permission_service.require_membership(member)
+
+    is_privileged = chat_permission_service.get_role_rank(member.get("role")) >= chat_permission_service.ROLE_RANK["MODERATOR"]
+    is_owner_or_assignee = (
+        int(task.get("assigned_to_user_id") or 0) == uid
+        or int(task.get("created_by_user_id") or 0) == uid
+    )
+    if not (is_privileged or is_owner_or_assignee):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the task creator, assignee, or Moderator/Admin/Owner can update this task.",
+        )
+
+    fields = payload.model_dump(exclude_unset=True)
+    if not fields:
+        return {"task": task}
+    updated = chat_task_repo.update_task(task_id, fields)
+    _broadcast_members(conv_id, "task_updated", {"conversation_id": conv_id, "task": updated})
+    return {"task": updated}
+
+
+@router.post("/tasks/{task_id}/authorize")
+def authorize_proposed_task(
+    task_id: int,
+    payload: TaskAuthorizeRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    uid = _uid(current_user)
+    try:
+        res = chat_agent_service.authorize_and_sync_task(
+            task_id=task_id,
+            actor_user_id=uid,
+            action=payload.action,
+            schedule_into_itinerary=payload.schedule_into_itinerary,
+            itinerary_id=payload.itinerary_id,
+            assigned_to_user_id=payload.assigned_to_user_id,
+            schedule_start=payload.schedule_start,
+            schedule_end=payload.schedule_end,
+            leg_kind=payload.leg_kind,
+            est_cost_inr=payload.est_cost_inr,
+        )
+    except (NotFoundError, ConflictError):
+        raise
+    except DomainError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.message) from exc
+
+    task = res["task"]
+    conv_id = int(task["conversation_id"])
+    _broadcast_members(conv_id, "task_updated", {"conversation_id": conv_id, "task": task})
+    if res.get("created_leg"):
+        conv = chat_repo.get_conversation(conv_id)
+        _broadcast_members(
+            conv_id,
+            "itinerary_updated",
+            {
+                "conversation_id": conv_id,
+                "trip_id": conv.get("trip_id") if conv else None,
+                "leg": res["created_leg"],
+            },
+        )
+    return res
+
+
+# ---------------------------------------------------------------------------
+# Notifications Center
+# ---------------------------------------------------------------------------
+
+
+@router.get("/notifications")
+def list_my_notifications(current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    notes = chat_task_repo.list_notifications(uid)
+    unread = sum(1 for n in notes if not n.get("is_read"))
+    return {"notifications": notes, "unread_count": unread}
+
+
+@router.post("/notifications/{notification_id}/read")
+def mark_notification_read_endpoint(notification_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    chat_task_repo.mark_notification_read(notification_id, _uid(current_user))
+    return {"ok": True}
+
+
+@router.post("/notifications/read-all")
+def mark_all_notifications_read_endpoint(current_user: dict[str, Any] = Depends(get_current_user)):
+    chat_task_repo.mark_all_notifications_read(_uid(current_user))
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Legacy /api/chat/trip/{trip_id}* Compatibility Endpoints (PostgreSQL-backed)
+# ---------------------------------------------------------------------------
 
 
 @router.get("/trip/{trip_id}")
-def get_trip_messages(trip_id: int):
-    try:
-        mongo = get_mongo_db()
-        cursor = mongo["trip_messages"].find({"trip_id": trip_id}).sort("created_at", 1)
-        messages = [_format_msg(doc) for doc in cursor]
-        if not messages:
-            messages = _seed_initial_trip_messages(trip_id)
-        return messages
-    except Exception:
-        return _seed_initial_trip_messages(trip_id)
+def get_trip_chat_compat(trip_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
+    uid = _uid(current_user)
+    conv = chat_repo.get_trip_conversation(trip_id)
+    if not conv:
+        raise NotFoundError(f"No conversation found for trip {trip_id}.")
+    conv_id = int(conv["conversation_id"])
+    member = chat_repo.get_member(conv_id, uid)
+    chat_permission_service.require_membership(member)
+    return {
+        "trip_id": trip_id,
+        "conversation_id": conv_id,
+        "conversation": conv,
+        "messages": chat_repo.list_messages(conv_id, uid, limit=100),
+        "members": chat_repo.list_members(conv_id),
+        "tasks": chat_task_repo.list_tasks(conv_id),
+    }
 
 
-@router.post("/trip/{trip_id}/messages", status_code=201)
-def post_trip_message(
+@router.post("/trip/{trip_id}/messages", status_code=status.HTTP_201_CREATED)
+def post_trip_chat_compat(
     trip_id: int,
     payload: ChatMessageIn,
-    token_creds=Depends(bearer_scheme),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ):
-    user = _get_optional_user(token_creds)
-    sender_name = (user.get("full_name") if user else None) or payload.sender_name or "Traveler"
-    sender_id = (int(user["sub"]) if user and "sub" in user else None) or (payload.sender_id or 1)
+    uid = _uid(current_user)
+    conv = chat_repo.get_trip_conversation(trip_id)
+    if not conv:
+        raise NotFoundError(f"No conversation found for trip {trip_id}.")
+    conv_id = int(conv["conversation_id"])
+    member = chat_repo.get_member(conv_id, uid)
+    chat_permission_service.require_can_send(member)
 
-    mongo = None
-    try:
-        mongo = get_mongo_db()
-    except Exception:
-        pass
-
-    msg_doc = {
-        "trip_id": trip_id,
-        "sender_id": sender_id,
-        "sender_name": sender_name,
-        "is_agent": False,
-        "text": payload.text,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    if mongo is not None:
-        try:
-            res = mongo["trip_messages"].insert_one(msg_doc)
-            msg_doc["id"] = str(res.inserted_id)
-        except Exception:
-            msg_doc["id"] = f"msg_{int(time.time() * 1000)}"
-    else:
-        msg_doc["id"] = f"msg_{int(time.time() * 1000)}"
-
-    formatted_user_msg = _format_msg(msg_doc)
-
-    # Active Agent Monitoring: Copilot analyzes user contribution and responds
-    agent_reply_text = _generate_agent_monitoring_response(trip_id, payload.text, sender_name)
-    if agent_reply_text:
-        agent_doc = {
-            "trip_id": trip_id,
-            "sender_id": 0,
-            "sender_name": "Yatra Copilot",
-            "is_agent": True,
-            "agent_badge": "AI Copilot",
-            "text": agent_reply_text,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        if mongo is not None:
-            try:
-                agent_res = mongo["trip_messages"].insert_one(agent_doc)
-                agent_doc["id"] = str(agent_res.inserted_id)
-            except Exception:
-                agent_doc["id"] = f"agent_{int(time.time() * 1000)}"
-        else:
-            agent_doc["id"] = f"agent_{int(time.time() * 1000)}"
-        formatted_user_msg["agent_message"] = _format_msg(agent_doc)
-
-    return formatted_user_msg
-
-
-
-@router.delete("/trip/{trip_id}/messages")
-def reset_trip_messages(trip_id: int):
-    mongo = get_mongo_db()
-    mongo["trip_messages"].delete_many({"trip_id": trip_id})
-    return {"status": "ok", "message": f"Chat reset for trip {trip_id}"}
+    return _send_and_process_message(
+        conversation=conv,
+        sender_user_id=uid,
+        sender_name=payload.sender_name or _uname(current_user, member),
+        body=payload.text,
+        reply_to_message_id=payload.reply_to_message_id,
+        mentions=payload.mentions,
+        attachments=payload.attachments,
+    )
 
 
 @router.post("/trip/{trip_id}/analyze")
-def analyze_and_update_plan(
+def analyze_trip_chat_compat(
     trip_id: int,
-    payload: Optional[ChatAnalyzeRequest] = None,
-    token_creds=Depends(bearer_scheme),
+    payload: Optional[ChatAnalyzeRequest] = Body(default=None),
+    current_user: dict[str, Any] = Depends(get_current_user),
 ):
-    user = _get_optional_user(token_creds)
-    user_id = int(user["sub"]) if user else 1
-
-    mongo = get_mongo_db()
-    cursor = mongo["trip_messages"].find({"trip_id": trip_id}).sort("created_at", 1)
-    all_msgs = list(cursor)
-
-    chat_transcript = " ".join([m.get("text", "") for m in all_msgs if not m.get("is_agent")])
-    if payload and payload.custom_instruction:
-        chat_transcript += f" Additional instruction: {payload.custom_instruction}"
-
-    # Extract target budget from chat discussion or default to 15000
-    budget_match = re.search(r"(\d{4,6})", chat_transcript.replace(",", ""))
-    target_budget = float(budget_match.group(1)) if budget_match else 15000.0
-
-    # Extract destination
-    lower_chat = chat_transcript.lower()
-    city = "Hampi" if "hampi" in lower_chat else "Agra"
-
-    synth_prompt = f"Plan a group trip to {city} based on group chat discussion: {chat_transcript} with budget under {int(target_budget)} INR"
-
-    # Draft itinerary through AI planner with self-correction
-    draft_result = ai_planner.draft_itinerary_with_self_correction(
-        trip_id=trip_id,
-        user_id=user_id,
-        prompt=synth_prompt,
-        inject_overlap_test=False,
-    )
-
-    itinerary = draft_result.get("itinerary", {})
-    legs = draft_result.get("legs", [])
-    total_cost = sum(float(l.get("est_cost_inr", 0)) for l in legs)
-
-    # Fetch trip members to calculate per-person budget
-    m_count = 3
-    sample_slots = []
-    try:
-        with get_pg_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) AS member_count FROM trip_member WHERE trip_id = %s", (trip_id,))
-                m_count = cur.fetchone()["member_count"] or 1
-                cur.execute("SELECT * FROM slot_availability WHERE city = %s ORDER BY window_start ASC LIMIT 4", (city,))
-                sample_slots = cur.fetchall()
-    except Exception:
-        from app.repositories import inventory_repo, trip_repo
-        t_data = trip_repo.get_trip(trip_id)
-        if t_data and "members" in t_data:
-            m_count = len(t_data["members"])
-        sample_slots = [s for s in inventory_repo.list_slots() if s.get("city") == city or city in s.get("circuit", "")]
-
-    per_person_est = round(total_cost / max(m_count, 1), 2)
-    budget_delta = round(target_budget - per_person_est, 2)
-    is_under = budget_delta >= 0
-
-    # Build agent response message with clean LaTeX mathematical formatting
-    agent_text = (
-        f"**Trip Consensus Synthesized**\n\n"
-        f"**Destination:** {city}\n"
-        f"**Generated Itinerary:** Version #{itinerary.get('version', 1)} with {len(legs)} scheduled legs\n"
-        f"**Travelers:** {m_count} registered group members\n\n"
-        f"**Budget & Cost Analysis:**\n"
-        f"$$\\text{{Total Group Cost}} = \\sum_{{i=1}}^{{{len(legs)}}} c_i = ₹{total_cost:,.2f}$$\n"
-        f"$$\\text{{Per-Person Share}} = \\frac{{\\text{{Total Group Cost}}}}{{\\text{{Travelers}}}} = \\frac{{₹{total_cost:,.2f}}}{{{m_count}}} = ₹{per_person_est:,.2f}$$\n"
-        f"$$\\Delta_{{\\text{{Budget}}}} = \\text{{Ceiling}} - \\text{{Per-Person}} = ₹{target_budget:,.2f} - ₹{per_person_est:,.2f} = {'+' if is_under else ''}₹{budget_delta:,.2f} \\quad \\text{{({'Within Budget' if is_under else 'Exceeds Ceiling'})}}$$\n\n"
-        f"**Capacity Allocations:** Mapped high-priority ASI slots to itinerary legs for your dates."
-    )
-
-    agent_plan_card = {
-        "itinerary_id": itinerary.get("itinerary_id"),
-        "version": itinerary.get("version"),
-        "destination": city,
-        "total_cost": total_cost,
-        "per_person_est": per_person_est,
-        "target_budget": target_budget,
-        "leg_count": len(legs),
-        "legs": legs,
-        "slots": sample_slots,
-    }
-
-    ai_doc = {
-        "trip_id": trip_id,
-        "sender_id": 0,
-        "sender_name": "Yatra Copilot",
-        "is_agent": True,
-        "agent_badge": "AI Copilot",
-        "text": agent_text,
-        "plan_summary": _clean_for_mongo(agent_plan_card),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    mongo["trip_messages"].insert_one(ai_doc)
-
-    # Return refreshed messages and the new plan
-    updated_cursor = mongo["trip_messages"].find({"trip_id": trip_id}).sort("created_at", 1)
-    messages = [_format_msg(doc) for doc in updated_cursor]
-
-    return {
-        "status": "success",
-        "draft_result": _clean_for_mongo(draft_result),
-        "agent_plan_card": _clean_for_mongo(agent_plan_card),
-        "messages": messages,
-    }
+    uid = _uid(current_user)
+    conv = chat_repo.get_trip_conversation(trip_id)
+    if not conv:
+        raise NotFoundError(f"No conversation found for trip {trip_id}.")
+    conv_id = int(conv["conversation_id"])
+    res = chat_agent_service.summarize_conversation(conv_id, uid, post_to_chat=True)
+    if res.get("message"):
+        _broadcast_members(conv_id, "message_new", {"conversation_id": conv_id, "message": res["message"]})
+    return res

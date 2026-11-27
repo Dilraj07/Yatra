@@ -3,44 +3,69 @@ import {
   LogOut,
   RefreshCw,
   User,
-  ArrowRight,
   Compass,
-  Sparkles,
   ChevronDown,
   MessageSquare,
   MapPin,
   Ticket,
   Wallet,
   Vote,
-  ShieldCheck,
-  Radio,
-  Database,
+  Plane,
 } from 'lucide-react';
 import { useUser, useClerk, UserButton } from '@clerk/react';
-import { apiRequest, clearAuthSession, getStoredUser, setAuthSession, clerkSync } from './api/client';
+import { apiRequest, clearAuthSession, getStoredUser, clerkSync } from './api/client';
 import AuthModal from './components/AuthModal';
 import ConstraintBanner from './components/ConstraintBanner';
 import TripChatHub from './components/TripChatHub';
 import TripsSection from './components/TripsSection';
 import PlannerSection from './components/PlannerSection';
 import VotingSection from './components/VotingSection';
-import SagaSection from './components/SagaSection';
 import ExpensesSection from './components/ExpensesSection';
 import OperatorSection from './components/OperatorSection';
 import LiveRadarSection from './components/LiveRadarSection';
-import AuditSection from './components/AuditSection';
+import NotificationPopover from './components/chat/NotificationPopover';
+import { chatApi, getChatAuthToken } from './api/chatApi';
 
 const WORKSPACE_TABS = [
-  { id: 'chat', label: 'Trip Workspace', icon: MessageSquare },
-  { id: 'itinerary', label: 'Itinerary Planner', icon: MapPin },
-  { id: 'radar', label: 'Live Radar', icon: Radio },
-  { id: 'voting', label: 'Group Approvals', icon: Vote },
-  { id: 'saga', label: 'Booking Engine', icon: ShieldCheck },
-  { id: 'expenses', label: 'Expenses & Split', icon: Wallet },
-  { id: 'tickets', label: 'Heritage Tickets', icon: Ticket },
-  { id: 'audit', label: 'Activity Logs', icon: Database },
-  { id: 'trips', label: 'All Trips', icon: Compass },
+  { id: 'chat', label: 'Workspace', icon: MessageSquare },
+  { id: 'itinerary', label: 'Itinerary', icon: MapPin },
+  { id: 'radar', label: 'Flights & Stays', icon: Plane },
+  { id: 'tickets', label: 'Tickets', icon: Ticket },
+  { id: 'voting', label: 'Approvals', icon: Vote },
+  { id: 'expenses', label: 'Expenses', icon: Wallet },
+  { id: 'trips', label: 'Trips', icon: Compass },
 ];
+
+function YatraLogo({ size = 'md' }) {
+  const iconClass = size === 'sm' ? 'w-5 h-5' : 'w-7 h-7';
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`${iconClass} shrink-0`}
+      fill="none"
+      aria-hidden="true"
+    >
+      {/* Companion traveler pin */}
+      <path
+        d="M16.5 3.5a4.5 4.5 0 0 0-4.5 4.5c0 3.2 4.5 9.5 4.5 9.5S21 11.2 21 8a4.5 4.5 0 0 0-4.5-4.5z"
+        fill="#dceeb1"
+        stroke="#000000"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="16.5" cy="8" r="1.4" fill="#000000" />
+      {/* Primary destination pin */}
+      <path
+        d="M8.5 5.5a5 5 0 0 0-5 5c0 3.6 5 10 5 10s5-6.4 5-10a5 5 0 0 0-5-5z"
+        fill="#000000"
+        stroke="#ffffff"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <circle cx="8.5" cy="10.5" r="1.8" fill="#ffffff" />
+    </svg>
+  );
+}
 
 export default function App({ hasClerk = true }) {
   const [user, setUser] = useState(() => getStoredUser());
@@ -54,20 +79,18 @@ export default function App({ hasClerk = true }) {
   const { isLoaded: clerkLoaded, isSignedIn: clerkSignedIn, user: clerkUser } = useUser();
   const { signOut: clerkSignOut } = useClerk();
 
-  const [status, setStatus] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const [trips, setTrips] = useState([]);
   const [activeTripId, setActiveTripId] = useState(1);
   const [tripDetail, setTripDetail] = useState(null);
   const [itineraries, setItineraries] = useState([]);
   const [proposals, setProposals] = useState([]);
-  const [sagas, setSagas] = useState([]);
   const [finances, setFinances] = useState(null);
-  const [pois, setPois] = useState([]);
   const [slots, setSlots] = useState([]);
   const [holds, setHolds] = useState([]);
-  const [auditRows, setAuditRows] = useState([]);
-  const [nosqlDocs, setNosqlDocs] = useState({ supplier_snapshots: [], llm_conversations: [] });
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [chatNavTarget, setChatNavTarget] = useState(null);
 
   // Track window scroll for smooth frosted-glass navbar blur
   useEffect(() => {
@@ -105,6 +128,8 @@ export default function App({ hasClerk = true }) {
     }
     clearAuthSession();
     setUser(null);
+    setNotifications([]);
+    setUnreadNotifications(0);
     notify('success', 'Signed out successfully.');
   };
 
@@ -112,39 +137,29 @@ export default function App({ hasClerk = true }) {
   const refreshAll = useCallback(async (targetTripId) => {
     const tid = targetTripId || activeTripId;
     try {
-      const [sys, usersData, tripsData, poisData, slotsData, holdsData, auditLogData, nosqlData] = await Promise.all([
-        apiRequest('/api/audit/system-status'),
+      const [usersData, tripsData, slotsData, holdsData] = await Promise.all([
         apiRequest('/api/auth/users'),
         apiRequest('/api/trips'),
-        apiRequest('/api/inventory/pois'),
         apiRequest('/api/inventory/slots'),
         apiRequest('/api/inventory/holds'),
-        apiRequest('/api/audit/postgres-log').catch(() => []),
-        apiRequest('/api/audit/nosql-documents').catch(() => ({})),
       ]);
-      setStatus(sys);
       setAllUsers(usersData);
       setTrips(tripsData);
-      setPois(poisData);
       setSlots(slotsData);
       setHolds(holdsData);
-      setAuditRows(auditLogData || []);
-      setNosqlDocs(nosqlData || { supplier_snapshots: [], llm_conversations: [] });
 
       const resolvedTripId = tid || tripsData[0]?.trip_id;
       if (resolvedTripId) {
         setActiveTripId(resolvedTripId);
-        const [detail, itins, props, sagaList, fin] = await Promise.all([
+        const [detail, itins, props, fin] = await Promise.all([
           apiRequest(`/api/trips/${resolvedTripId}`),
           apiRequest(`/api/itineraries/trip/${resolvedTripId}`),
           apiRequest(`/api/voting/trip/${resolvedTripId}`),
-          apiRequest(`/api/saga/trip/${resolvedTripId}`),
           apiRequest(`/api/expenses/trip/${resolvedTripId}`),
         ]);
         setTripDetail(detail);
         setItineraries(itins);
         setProposals(props);
-        setSagas(sagaList);
         setFinances(fin);
       }
     } catch (err) {
@@ -156,8 +171,24 @@ export default function App({ hasClerk = true }) {
     refreshAll(activeTripId);
   }, [activeTripId, refreshAll]);
 
-  const currentIdx = WORKSPACE_TABS.findIndex((t) => t.id === activeTab);
-  const nextTab = WORKSPACE_TABS[(currentIdx + 1) % WORKSPACE_TABS.length];
+  const handleNotificationStateChange = useCallback((list, unread) => {
+    setNotifications(list || []);
+    setUnreadNotifications(unread || 0);
+  }, []);
+
+  const handleNavigateFromChat = useCallback((tab, targetTripId) => {
+    if (targetTripId) {
+      setActiveTripId(Number(targetTripId));
+    }
+    setActiveTab(tab);
+  }, []);
+
+  useEffect(() => {
+    if (!getChatAuthToken()) return;
+    chatApi.listNotifications()
+      .then((res) => handleNotificationStateChange(res.notifications, res.unread_count))
+      .catch(() => {});
+  }, [user, handleNotificationStateChange]);
 
   return (
     <div className="min-h-screen bg-canvas text-ink flex flex-col font-sans">
@@ -171,15 +202,15 @@ export default function App({ hasClerk = true }) {
       >
         <div className="max-w-[1280px] mx-auto h-full px-6 flex items-center justify-between gap-4">
           <div className="flex items-center gap-6">
-            {/* Confident Editorial Logo */}
-            <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab('chat')}>
-              <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold shadow-2xs">
-                <Compass className="w-4.5 h-4.5 text-sky-400" />
+            {/* Simple Travel Logo */}
+            <div className="flex items-center gap-2.5 cursor-pointer group" onClick={() => setActiveTab('chat')}>
+              <div className="group-hover:scale-105 transition-transform">
+                <YatraLogo />
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-xl font-bold tracking-tight text-black">Yatra</span>
-                <span className="hidden sm:inline-block text-[11px] font-mono uppercase tracking-wider text-black/50">
-                  Smart Group Tourism
+                <span className="hidden sm:inline-block text-[11px] font-mono uppercase tracking-wider text-black/45">
+                  Group Travel
                 </span>
               </div>
             </div>
@@ -192,11 +223,11 @@ export default function App({ hasClerk = true }) {
               onChange={(e) => setActiveTripId(Number(e.target.value))}
             >
               {trips.length === 0 ? (
-                <option value="">No previous trips</option>
+                <option value="">No trips yet</option>
               ) : (
                 trips.map((t) => (
                   <option key={t.trip_id} value={t.trip_id}>
-                    Trip #{t.trip_id}: {t.title}
+                    {t.title}
                   </option>
                 ))
               )}
@@ -212,6 +243,30 @@ export default function App({ hasClerk = true }) {
             >
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
+
+            <NotificationPopover
+              notifications={notifications}
+              unreadCount={unreadNotifications}
+              onRefresh={async () => {
+                if (!getChatAuthToken()) return;
+                try {
+                  const res = await chatApi.listNotifications();
+                  setNotifications(res.notifications || []);
+                  setUnreadNotifications(res.unread_count || 0);
+                } catch {
+                  // ignore silently
+                }
+              }}
+              onSelectNotification={(n) => {
+                setActiveTab('chat');
+                setChatNavTarget({
+                  conversationId: n.conversation_id,
+                  messageId: n.message_id,
+                  taskId: n.task_id,
+                  ts: Date.now(),
+                });
+              }}
+            />
 
             {/* User Profile / Auth Button */}
             {user ? (
@@ -321,8 +376,11 @@ export default function App({ hasClerk = true }) {
               finances={finances}
               currentUser={user}
               onOpenAuth={() => setAuthOpen(true)}
+              onNavigateTab={handleNavigateFromChat}
               onRefresh={refreshAll}
               notify={notify}
+              externalNavTarget={chatNavTarget}
+              onNotificationStateChange={handleNotificationStateChange}
             />
           )}
           {activeTab === 'itinerary' && (
@@ -345,7 +403,6 @@ export default function App({ hasClerk = true }) {
           )}
           {activeTab === 'tickets' && (
             <OperatorSection
-              pois={pois}
               slots={slots}
               holds={holds}
               onRefresh={refreshAll}
@@ -372,21 +429,6 @@ export default function App({ hasClerk = true }) {
               notify={notify}
             />
           )}
-          {activeTab === 'saga' && (
-            <SagaSection
-              activeTripId={activeTripId}
-              itineraries={itineraries}
-              sagas={sagas}
-              onRefresh={refreshAll}
-              notify={notify}
-            />
-          )}
-          {activeTab === 'audit' && (
-            <AuditSection
-              auditRows={auditRows}
-              nosqlDocs={nosqlDocs}
-            />
-          )}
           {activeTab === 'trips' && (
             <TripsSection
               trips={trips}
@@ -403,17 +445,13 @@ export default function App({ hasClerk = true }) {
         </div>
       </main>
 
-      {/* Production Consumer App Footer */}
-      <footer className="border-t border-hairline bg-canvas py-6 px-6 mt-auto">
-        <div className="max-w-[1280px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink/50">
+      <footer className="border-t border-hairline bg-canvas py-5 px-6 mt-auto">
+        <div className="max-w-[1280px] mx-auto flex items-center justify-between text-xs text-ink/50">
           <div className="flex items-center gap-2">
+            <YatraLogo size="sm" />
             <span className="font-bold text-ink">Yatra</span>
-            <span>·</span>
-            <span>Smart Group Tourism Platform</span>
           </div>
-          <div>
-            <span>© 2026 Yatra Travel Technologies Inc. · Plan smarter together.</span>
-          </div>
+          <span>Plan trips together</span>
         </div>
       </footer>
 

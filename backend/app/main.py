@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -9,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.db import close_db, init_db
 from app.core.exceptions import DomainError, domain_error_handler, psycopg_error_handler
-from app.routers import audit, auth, chat, expenses, inventory, itineraries, radar, saga, trips, voting
+from app.routers import audit, auth, chat, chat_realtime, expenses, inventory, itineraries, radar, saga, trips, voting
+from app.services.realtime_manager import realtime_manager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
 logger = logging.getLogger("yatra.api")
@@ -18,7 +20,8 @@ logger = logging.getLogger("yatra.api")
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    logger.info("Yatra backend initialized (PostgreSQL pool + MongoDB client).")
+    realtime_manager.set_loop(asyncio.get_running_loop())
+    logger.info("Yatra backend initialized (PostgreSQL pool + realtime hub).")
     yield
     close_db()
     logger.info("Yatra backend connections closed.")
@@ -54,6 +57,7 @@ app.add_exception_handler(psycopg.Error, psycopg_error_handler)
 
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(chat_realtime.router)
 app.include_router(trips.router)
 app.include_router(inventory.router)
 app.include_router(itineraries.router)

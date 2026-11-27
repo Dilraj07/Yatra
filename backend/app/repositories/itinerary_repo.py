@@ -2,6 +2,8 @@ import json
 from datetime import datetime
 from typing import Any
 
+import psycopg
+
 from app.core.db import get_pg_conn
 
 _LIVE_ITINERARIES: list[dict[str, Any]] = [
@@ -194,7 +196,7 @@ def add_leg_with_participants(
                     )
                 conn.commit()
                 return leg
-    except Exception:
+    except (RuntimeError, psycopg.OperationalError):
         from app.repositories.user_repo import list_users
         users = list_users()
         matching_it = next((it for it in _LIVE_ITINERARIES if it["itinerary_id"] == itinerary_id), None)

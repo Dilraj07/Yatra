@@ -79,10 +79,10 @@ def _extract_intent_with_gemini(prompt: str, available_slots: list[dict[str, Any
         "selected_slot_ids (list of int), include_flight (bool), include_hotel (bool), "
         "prefer_budget_inr (number)."
     )
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
-    )
+    candidates = []
+    for m in (settings.gemini_model, "gemini-2.5-flash", "gemini-flash-lite-latest", "gemini-flash-latest"):
+        if m and m not in candidates:
+            candidates.append(m)
     payload = {
         "contents": [
             {
@@ -97,10 +97,15 @@ def _extract_intent_with_gemini(prompt: str, available_slots: list[dict[str, Any
     }
     try:
         with httpx.Client(timeout=15.0) as client:
-            res = client.post(url, json=payload)
-            if res.status_code == 200:
-                text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-                return json.loads(text)
+            for model_name in candidates:
+                url = (
+                    f"https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{model_name}:generateContent?key={settings.gemini_api_key}"
+                )
+                res = client.post(url, json=payload)
+                if res.status_code == 200:
+                    text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    return json.loads(text)
     except Exception:
         return None
     return None

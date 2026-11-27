@@ -7,7 +7,7 @@ def create_user(email: str, full_name: str, home_city: str, password_hash: str) 
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO app_user (email, full_name, home_city, password_hash) "
-                "VALUES (%s, %s, %s, %s) RETURNING user_id, email, full_name, home_city, created_at",
+                "VALUES (%s, %s, %s, %s) RETURNING user_id, email, full_name, home_city, avatar_url, last_seen_at, created_at",
                 (email, full_name, home_city, password_hash),
             )
             user = cur.fetchone()
@@ -19,7 +19,7 @@ def get_user_by_email(email: str) -> dict[str, Any] | None:
     with get_pg_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT user_id, email, full_name, home_city, password_hash FROM app_user WHERE email = %s",
+                "SELECT user_id, email, full_name, home_city, avatar_url, last_seen_at, password_hash FROM app_user WHERE email = %s",
                 (email,),
             )
             return cur.fetchone()
@@ -40,7 +40,10 @@ def list_users() -> list[dict[str, Any]]:
     try:
         with get_pg_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT user_id, email, full_name, home_city, created_at FROM app_user ORDER BY user_id ASC")
+                cur.execute(
+                    "SELECT user_id, email, full_name, home_city, avatar_url, last_seen_at, created_at "
+                    "FROM app_user ORDER BY user_id ASC"
+                )
                 return cur.fetchall()
     except Exception:
         return list(_FALLBACK_USERS)

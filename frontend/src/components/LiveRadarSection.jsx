@@ -1,17 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Compass,
-  Radio,
   Plane,
   Building,
   Sun,
   Wind,
   RefreshCw,
   CreditCard,
-  PlusCircle,
-  ExternalLink,
-  ShieldCheck,
-  CheckCircle2,
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import { openRazorpayCheckout } from '../api/payment';
@@ -24,12 +18,10 @@ const PRESET_CITIES = [
   { id: 'jaipur', name: 'Jaipur' },
 ];
 
-export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, notify }) {
+export default function LiveRadarSection({ activeTripId, notify }) {
   const [selectedCity, setSelectedCity] = useState('goa');
   const [customCity, setCustomCity] = useState('');
-  const [autoRefresh, setAutoRefresh] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(null);
 
   const [flightsData, setFlightsData] = useState(null);
   const [hotelsData, setHotelsData] = useState(null);
@@ -48,9 +40,8 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
       if (flightsRes) setFlightsData(flightsRes);
       if (hotelsRes) setHotelsData(hotelsRes);
       if (weatherRes) setWeatherData(weatherRes);
-      setLastUpdated(new Date().toLocaleTimeString());
     } catch (err) {
-      if (notify) notify('error', 'Live radar feed error: ' + err.message);
+      if (notify) notify('error', 'Could not load flights & stays: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -60,15 +51,6 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
   useEffect(() => {
     fetchLiveFeeds(selectedCity);
   }, [selectedCity, fetchLiveFeeds]);
-
-  // Auto-refresh interval (every 15s)
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(() => {
-      fetchLiveFeeds(selectedCity);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, selectedCity, fetchLiveFeeds]);
 
   function handleCityChange(cityId) {
     setSelectedCity(cityId);
@@ -133,61 +115,34 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
 
   return (
     <div className="space-y-6">
-      {/* Header Banner - Matching Trip Workspace */}
+      {/* Header Banner */}
       <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-pill text-xs font-semibold uppercase tracking-wider bg-block-lime text-black border border-black/10">
-                <Radio className="w-3.5 h-3.5" /> Live Radar
-              </span>
-              <span className="text-xs font-mono px-2.5 py-0.5 rounded-pill bg-surface-soft border border-hairline text-black/70">
-                Live Feed Active
-              </span>
-            </div>
+          <div className="space-y-1">
             <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-black">
-              Flights & Accommodations Radar
+              Flights & Stays
             </h1>
-            <div className="flex flex-wrap items-center gap-4 text-xs text-black/60 pt-0.5">
-              <span className="flex items-center gap-1.5">
-                <Plane className="w-3.5 h-3.5 text-black/40" /> Commercial Airspace
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Building className="w-3.5 h-3.5 text-black/40" /> Verified Accommodations
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Sun className="w-3.5 h-3.5 text-black/40" /> Ground Conditions
-              </span>
-            </div>
+            <p className="text-xs text-black/60">
+              Compare live flights, hotels, and weather for your destination.
+            </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            <label className="flex items-center gap-2 text-xs font-mono cursor-pointer select-none bg-surface-soft px-3 py-1.5 rounded-pill border border-hairline text-black/70">
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-                className="accent-black"
-              />
-              <span>Auto-poll (15s)</span>
-            </label>
-            <button
-              onClick={() => fetchLiveFeeds(selectedCity)}
-              disabled={loading}
-              className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Refreshing...' : 'Ping Telemetry'}
-            </button>
-          </div>
+          <button
+            onClick={() => fetchLiveFeeds(selectedCity)}
+            disabled={loading}
+            className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0 self-start md:self-auto"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
         </div>
       </div>
 
-      {/* Sector Selector & Live Weather Bar */}
+      {/* City Selector & Weather Bar */}
       <div className="bg-white border border-hairline rounded-2xl p-5 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-mono font-bold text-black/50 mr-1">SECTOR:</span>
+            <span className="text-xs font-mono font-bold text-black/50 mr-1">CITY:</span>
             {PRESET_CITIES.map((c) => (
               <button
                 key={c.id}
@@ -206,13 +161,13 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
           <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 w-full md:w-auto">
             <input
               type="text"
-              placeholder="Search city (e.g. Manali, Kochi)..."
+              placeholder="Search any city..."
               value={customCity}
               onChange={(e) => setCustomCity(e.target.value)}
               className="field-input text-xs py-1.5 px-3 w-48"
             />
             <button type="submit" className="btn-secondary text-xs py-1.5 px-3">
-              Track
+              Search
             </button>
           </form>
         </div>
@@ -226,7 +181,7 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
               </div>
               <div>
                 <div className="text-xs text-black/50 font-mono uppercase">
-                  {weatherData.city} Ground Conditions
+                  {weatherData.city} Weather
                 </div>
                 <div className="text-base font-bold text-black flex items-center gap-2">
                   <span>{weatherData.weather.temperature_c}°C</span>
@@ -237,31 +192,25 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
               </div>
             </div>
 
-            <div className="flex items-center gap-6 text-xs font-mono text-black/60">
-              <div className="flex items-center gap-1.5">
-                <Wind className="w-3.5 h-3.5 text-black/40" />
-                <span>Wind: {weatherData.weather.windspeed_kmh} km/h</span>
-              </div>
-              <div>
-                Coordinates: {weatherData.coordinates?.lat.toFixed(2)}°N, {weatherData.coordinates?.lon.toFixed(2)}°E
-              </div>
-              {lastUpdated && <div className="text-black/40">Last Ping: {lastUpdated}</div>}
+            <div className="flex items-center gap-1.5 text-xs font-mono text-black/60">
+              <Wind className="w-3.5 h-3.5 text-black/40" />
+              <span>Wind: {weatherData.weather.windspeed_kmh} km/h</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Two-Column Grid: Live Flights & Real Accommodations */}
+      {/* Two-Column Grid: Flights & Stays */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Column 1: Live Airspace Radar */}
+        {/* Column 1: Flights */}
         <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-hairline">
             <div className="flex items-center gap-2">
               <Plane className="w-4 h-4 text-black" />
-              <span className="caption-mono font-bold text-black">AIRSPACE RADAR · LIVE FLIGHT TELEMETRY</span>
+              <span className="caption-mono font-bold text-black">FLIGHTS</span>
             </div>
             <span className="text-xs font-mono text-black/60 bg-surface-soft px-2.5 py-0.5 rounded-pill border border-hairline">
-              {flightsData?.flights?.length || 0} Aircraft on Screen
+              {flightsData?.flights?.length || 0} found
             </span>
           </div>
 
@@ -300,18 +249,17 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] block text-black/40">FARE ESTIMATE</span>
+                    <span className="text-[10px] block text-black/40">FARE</span>
                     <span className="font-bold text-black">₹3,400</span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-hairline">
-                  <span className="text-[10px] font-mono text-emerald-700 font-semibold">Active Transponder Signal</span>
+                <div className="flex items-center justify-end pt-2 border-t border-hairline">
                   <button
                     onClick={() => handleBookFlight(flight)}
                     className="btn-success py-1 px-3.5 rounded-pill text-xs flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer font-semibold"
                   >
-                    <CreditCard className="w-3.5 h-3.5" /> Book Air Seat
+                    <CreditCard className="w-3.5 h-3.5" /> Book Flight
                   </button>
                 </div>
               </div>
@@ -319,21 +267,21 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
 
             {(!flightsData?.flights || flightsData.flights.length === 0) && (
               <div className="p-8 text-center text-xs text-black/50 font-mono">
-                Scanning sector airspace... Click "Ping Telemetry" to query active telemetry.
+                No flights shown yet. Click Refresh to check again.
               </div>
             )}
           </div>
         </div>
 
-        {/* Column 2: Real Verified Accommodations */}
+        {/* Column 2: Hotels & Stays */}
         <div className="bg-white border border-hairline rounded-2xl p-6 shadow-xs space-y-4">
           <div className="flex items-center justify-between pb-3 border-b border-hairline">
             <div className="flex items-center gap-2">
               <Building className="w-4 h-4 text-black" />
-              <span className="caption-mono font-bold text-black">VERIFIED ACCOMMODATIONS</span>
+              <span className="caption-mono font-bold text-black">HOTELS & STAYS</span>
             </div>
             <span className="text-xs font-mono text-black/60 bg-surface-soft px-2.5 py-0.5 rounded-pill border border-hairline">
-              {hotelsData?.hotels?.length || 0} Properties Found
+              {hotelsData?.hotels?.length || 0} found
             </span>
           </div>
 
@@ -372,7 +320,7 @@ export default function LiveRadarSection({ activeTripId, tripDetail, onRefresh, 
                     onClick={() => handleBookHotel(hotel)}
                     className="btn-success py-1.5 px-3.5 rounded-pill text-xs flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer font-semibold"
                   >
-                    <CreditCard className="w-3.5 h-3.5" /> Book with Razorpay
+                    <CreditCard className="w-3.5 h-3.5" /> Book Stay
                   </button>
                 </div>
               </div>

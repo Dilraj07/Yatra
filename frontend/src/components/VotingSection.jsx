@@ -40,19 +40,19 @@ export default function VotingSection({
     <div className="color-block bg-block-cream space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <span className="eyebrow-mono">GROUP CONSENSUS & QUORUM APPROVALS</span>
-          <h2 className="display-lg mt-1">Approve itineraries with fair group agreement.</h2>
+          <h2 className="display-lg">Group Approvals</h2>
+          <p className="text-xs text-ink/70 mt-1">Vote together before confirming a trip plan.</p>
         </div>
         {tripDetail?.members?.length > 0 && (
           <div className="bg-canvas border border-hairline rounded-md p-2.5 min-w-[220px]">
-            <label className="caption-mono block mb-1">ACTING VOTER</label>
+            <label className="caption-mono block mb-1">VOTE AS</label>
             <select
-              aria-label="Acting Voter"
+              aria-label="Vote as"
               className="field-input py-1.5 text-sm"
               value={voterOverride}
               onChange={(e) => setVoterOverride(e.target.value)}
             >
-              <option value="">Logged-in User</option>
+              <option value="">You (Signed-in User)</option>
               {tripDetail.members.map((m) => (
                 <option key={m.user_id} value={m.user_id}>
                   {m.full_name}
@@ -69,7 +69,7 @@ export default function VotingSection({
             <div className="flex justify-between items-start gap-2">
               <div>
                 <span className="caption-mono">
-                  PROPOSAL #{prop.proposal_id} · ITINERARY v{prop.itinerary_version}
+                  Plan v{prop.itinerary_version}
                 </span>
                 <h3 className="text-lg font-bold mt-0.5">{prop.itinerary_summary}</h3>
               </div>
@@ -84,10 +84,10 @@ export default function VotingSection({
               </div>
               {prop.quorum_met ? (
                 <span className="inline-flex items-center gap-1 text-sm font-medium text-semantic-success">
-                  <Check className="w-4 h-4" /> Ready
+                  <Check className="w-4 h-4" /> Approved
                 </span>
               ) : (
-                <span className="caption-mono">NOT MET</span>
+                <span className="caption-mono">PENDING</span>
               )}
             </div>
 
@@ -117,7 +117,7 @@ export default function VotingSection({
                 onClick={() => handleCommitApproval(prop.itinerary_id)}
                 className="btn-secondary text-sm py-2 px-4 ml-auto border-primary"
               >
-                Commit Approval
+                Confirm Plan
               </button>
             </div>
           </div>
@@ -125,7 +125,7 @@ export default function VotingSection({
 
         {proposals.length === 0 && (
           <div className="col-span-full editorial-card p-10 text-center text-ink/50 text-sm">
-            No active proposals yet. Open a proposal from Trip Workspace to initiate voting.
+            No plans waiting for approval yet. Share a plan from Itinerary to start voting.
           </div>
         )}
       </div>
